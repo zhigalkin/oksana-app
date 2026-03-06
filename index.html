@@ -183,6 +183,13 @@ input[type=range]{flex:1;accent-color:var(--accent);height:3px;}
   <div class="section-label" id="settingsLabel">Налаштування</div>
   <div class="settings">
     <div class="setting-row">
+      <div class="lbl"><span class="ico">🎵</span><span id="musicSourceLabel">Музыка</span></div>
+      <div style="display:flex;gap:6px;">
+        <button class="lang-btn active" id="srcYT" onclick="setMusicSource('yt')">▶ YouTube</button>
+        <button class="lang-btn" id="srcVK" onclick="setMusicSource('vk')">VK 🎵</button>
+      </div>
+    </div>
+    <div class="setting-row">
       <div class="lbl"><span class="ico">🔊</span><span id="voiceReplyLabel">Голосова відповідь</span></div>
       <button class="toggle on" id="voiceToggle" onclick="toggleVoice()"></button>
     </div>
@@ -197,6 +204,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:3px;}
 <script>
 const GOOGLE_CLIENT_ID='1098424775961-4cdjcjgvhpf2ejr5f1uajf8acql20bik.apps.googleusercontent.com';
 const YT_API_KEY='AIzaSyBt0EmOEsmYMcoUxajSWwZCqh6qal4S65I';
+const VK_APP_ID='54473967';
+const VK_TOKEN='c453db57c453db57c453db57ebc76cefb8cc453c453db57adf8dee4bd7c0556bc3f4047';
 
 const i18n={
   uk:{
@@ -207,7 +216,7 @@ const i18n={
     voiceReply:'Голосова відповідь',speed:'Швидкість',
     hint:'Пробіл — активувати мікрофон • Команди: "увімкни [назва]", "пауза", "наступний"',
     cmds:[
-      {ico:'🎵',label:'Популярне',text:'увімкни щось популярне'},
+      {ico:'🎵',label:'Популярне',text:'включи что-нибудь популярное'},
       {ico:'📋',label:'Мої плейлисти',text:'покажи мої плейлисти'},
       {ico:'😄',label:'Жарт',text:'розкажи жарт'},
       {ico:'✨',label:'Факт',text:'розкажи цікавий факт'},
@@ -281,6 +290,7 @@ const i18n={
 
 let lang='uk', t=i18n.uk;
 let isListening=false,voiceEnabled=true,speechRate=1.0;
+let musicSource='vk'; // 'yt' or 'vk'
 let recognition=null,ytPlayer=null,ytReady=true;
 let currentQueue=[],currentIdx=0,isPlaying=false;
 let accessToken=null,userInfo=null,playlists=[];
@@ -315,6 +325,90 @@ function renderCmds(){
 function initPlayer(){ ytReady=true; }
 initPlayer();
 
+// ── VK MUSIC ─────────────────────────────────────────────────────
+function setMusicSource(src){
+  musicSource=src;
+  document.getElementById('srcYT').classList.toggle('active',src==='yt');
+  document.getElementById('srcVK').classList.toggle('active',src==='vk');
+}
+
+function vkJsonp(method, params){
+  return new Promise((resolve,reject)=>{
+    const cb='vkcb_'+Math.random().toString(36).slice(2);
+    const s=document.createElement('script');
+    const p=new URLSearchParams({...params,access_token:VK_TOKEN,v:'5.131',callback:cb});
+    s.src=`https://api.vk.com/method/${method}?${p}`;
+    s.onerror=()=>{delete window[cb];s.remove();reject(new Error('vk error'));};
+    window[cb]=data=>{delete window[cb];s.remove();resolve(data);};
+    document.head.appendChild(s);
+    setTimeout(()=>{delete window[cb];s.remove();reject(new Error('timeout'));},8000);
+  });
+}
+
+async function searchVK(query){
+  try{
+    const data=await vkJsonp('audio.search',{q:query,count:10,sort:0});
+    return data.response?.items||[];
+  }catch(e){console.error('VK search error',e);return [];}
+}
+
+async function playVKQuery(query){
+  addAIBubble(t.searching(query));
+  const items=await searchVK(query);
+  if(!items.length){addAIBubble(t.notFound);return;}
+  
+  // Build queue
+  currentQueue=items.map(a=>({vk:true,id:a.id,url:a.url,title:a.title,artist:a.artist,thumb:a.album?.thumb?.photo_300||''}));
+  currentIdx=0;
+  playVKTrack(currentQueue[0]);
+  showVKResults(items);
+}
+
+function showVKResults(items){
+  const list=document.getElementById('resultsList');
+  list.classList.add('show');
+  list.innerHTML=items.map((a,i)=>`
+    <div class="result-item" onclick="playVKTrack(currentQueue[${i}])">
+      <img class="result-thumb" src="${a.album?.thumb?.photo_68||''}" onerror="this.src=''" alt="" style="background:var(--card2)">
+      <div class="result-info">
+        <div class="result-title">${escHtml(a.title)}</div>
+        <div class="result-ch">${escHtml(a.artist)}</div>
+      </div>
+      <span class="result-play">▶</span>
+    </div>`).join('');
+  setTimeout(()=>list.classList.remove('show'),10000);
+}
+
+let vkAudio=null;
+function playVKTrack(track){
+  if(!track||!track.url){addAIBubble('Трек недоступен.');return;}
+  
+  // Stop previous
+  if(vkAudio){vkAudio.pause();vkAudio=null;}
+  
+  // Hide YT iframe
+  document.getElementById('ytIframe').src='';
+  
+  // Play via HTML5 Audio — works perfectly on iOS!
+  vkAudio=new Audio(track.url);
+  vkAudio.play().then(()=>{
+    isPlaying=true;
+    document.getElementById('playPauseBtn').textContent='⏸️';
+  }).catch(e=>{
+    addAIBubble('Трек недоступен, пробую следующий...');
+    nextTrack();
+  });
+  vkAudio.onended=()=>nextTrack();
+  vkAudio.volume=parseInt(document.getElementById('volRange').value)/100;
+  
+  // Update player UI
+  document.getElementById('playerCard').classList.add('show');
+  document.getElementById('playerTitle').textContent=track.title;
+  document.getElementById('playerChannel').textContent=track.artist;
+  document.getElementById('playerThumb').src=track.thumb;
+  document.getElementById('resultsList').classList.remove('show');
+}
+
 function ytJsonp(url){
   return new Promise((resolve,reject)=>{
     const cb='ytcb_'+Math.random().toString(36).slice(2);
@@ -341,6 +435,7 @@ async function searchYouTube(query){
 }
 
 async function playYouTubeQuery(query){
+  if(musicSource==='vk'){await playVKQuery(query);return;}
   addAIBubble(t.searching(query));
   const items=await searchYouTube(query);
   if(!items.length){addAIBubble(t.notFound);return;}
@@ -395,19 +490,35 @@ function playVideoById(id,title,ch,thumb,idx){
 }
 
 function togglePlayPause(){
+  if(vkAudio){
+    if(isPlaying){vkAudio.pause();isPlaying=false;document.getElementById('playPauseBtn').textContent='▶️';}
+    else{vkAudio.play();isPlaying=true;document.getElementById('playPauseBtn').textContent='⏸️';}
+    return;
+  }
   const iframe=document.getElementById('ytIframe');
   if(isPlaying){
-    // Pause: reload without autoplay
     iframe.src=`https://www.youtube.com/embed/${currentVideoId}?autoplay=0&playsinline=1&rel=0&origin=${encodeURIComponent(location.origin)}`;
-    isPlaying=false; document.getElementById('playPauseBtn').textContent='▶️';
-  } else {
+    isPlaying=false;document.getElementById('playPauseBtn').textContent='▶️';
+  }else{
     iframe.src=`https://www.youtube.com/embed/${currentVideoId}?autoplay=1&playsinline=1&rel=0&origin=${encodeURIComponent(location.origin)}`;
-    isPlaying=true; document.getElementById('playPauseBtn').textContent='⏸️';
+    isPlaying=true;document.getElementById('playPauseBtn').textContent='⏸️';
   }
 }
-function nextTrack(){if(currentQueue.length){currentIdx=(currentIdx+1)%currentQueue.length;playVideo(currentQueue[currentIdx]);}}
-function prevTrack(){if(currentQueue.length){currentIdx=(currentIdx-1+currentQueue.length)%currentQueue.length;playVideo(currentQueue[currentIdx]);}}
-function setVolume(v){ /* Volume controlled via YouTube player controls */ }
+function nextTrack(){
+  if(!currentQueue.length)return;
+  currentIdx=(currentIdx+1)%currentQueue.length;
+  const track=currentQueue[currentIdx];
+  if(track.vk)playVKTrack(track);else playVideo(track);
+}
+function prevTrack(){
+  if(!currentQueue.length)return;
+  currentIdx=(currentIdx-1+currentQueue.length)%currentQueue.length;
+  const track=currentQueue[currentIdx];
+  if(track.vk)playVKTrack(track);else playVideo(track);
+}
+function setVolume(v){
+  if(vkAudio)vkAudio.volume=parseInt(v)/100;
+}
 
 // GOOGLE AUTH
 function handleGoogleAuth(){
