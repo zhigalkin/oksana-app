@@ -1460,168 +1460,216 @@ function formatTime(ms) {
 // ── VOICE RECOGNITION ────────────────────────────────────────────
 function initVoiceRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { document.getElementById('mic-btn').style.opacity = '0.3'; return; }
+  if (!SR) {
+    document.getElementById('mic-btn').style.opacity = '0.3';
+    document.getElementById('mic-btn').title = 'Голос не підтримується';
+    return;
+  }
 
-  // Main recognition — for commands
-  recognition = new SR();
-  recognition.continuous = false;
-  recognition.interimResults = true;
-  recognition.lang = lang === 'uk' ? 'uk-UA' : 'ru-RU';
-
-  recognition.onresult = e => {
-    let final = '';
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) final += e.results[i][0].transcript;
-      else interim += e.results[i][0].transcript;
-    }
-    if (interim) document.getElementById('msg-input').value = interim;
-    if (final) {
-      document.getElementById('msg-input').value = final;
-      stopMic();
-      sendMsg();
-    }
-  };
-
-  recognition.onend = () => {
-    isListening = false;
-    document.getElementById('mic-btn').classList.remove('active');
-    // If always-on mode — restart wake word listener
-    if (alwaysOn && !awaitingCommand) startWakeListener();
-  };
-  recognition.onerror = e => {
-    console.log('Recognition error:', e.error);
-    isListening = false;
-    document.getElementById('mic-btn').classList.remove('active');
-    if (alwaysOn && !awaitingCommand) setTimeout(startWakeListener, 1000);
-  };
-
-  // Load always-on state
+  // Загружаем состояние always-on
   alwaysOn = localStorage.getItem('oksana_always_on') === 'true';
   if (alwaysOn) {
     document.getElementById('always-on-btn').classList.add('on');
-    setTimeout(startWakeListener, 500);
+    setTimeout(() => startListening('wake'), 800);
   }
   updateWakeUI();
 }
 
-// ── WAKE WORD ─────────────────────────────────────────────────────
-function startWakeListener() {
+// ── ЕДИНАЯ СИСТЕМА РАСПОЗНАВАНИЯ ─────────────────────────────────
+// mode: 'wake' = ждём слово "Оксана", 'command' = слушаем команду, 'manual' = ручной режим
+
+let currentMode = 'idle';
+let silenceTimer = null;
+let collectedText = '';
+const WAKE_WORDS = ['оксана', 'oksana', 'оксано', 'оксанка', 'aksana'];
+
+function startListening(mode) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR || !alwaysOn || isListening) return;
+  if (!SR) return;
 
-  wakeRecognition = new SR();
-  wakeRecognition.continuous = true;
-  wakeRecognition.interimResults = true;
-  wakeRecognition.lang = lang === 'uk' ? 'uk-UA' : 'ru-RU';
+  // Останавливаем предыдущую сессию
+  if (recognition) {
+    try { recognition.abort(); } catch(e) {}
+    recognition = null;
+  }
+  clearTimeout(silenceTimer);
 
-  const wakeWords = ['оксана', 'oksana', 'оксано', 'оксанка'];
+  currentMode = mode;
+  collectedText = '';
 
-  wakeRecognition.onresult = e => {
+  const rec = new SR();
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.lang = lang === 'uk' ? 'uk-UA' : 'ru-RU';
+  rec.maxAlternatives = 1;
+  recognition = rec;
+
+  rec.onstart = () => {
+    if (mode === 'wake') {
+      updateWakeUI('listening');
+    } else if (mode === 'command' || mode === 'manual') {
+      isListening = true;
+      document.getElementById('mic-btn').classList.add('active');
+      updateWakeUI('active');
+    }
+  };
+
+  rec.onresult = (e) => {
+    let interimText = '';
+    let finalText = '';
+
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      const text = e.results[i][0].transcript.toLowerCase().trim();
-      const hasWakeWord = wakeWords.some(w => text.includes(w));
-      if (hasWakeWord) {
-        wakeRecognition.stop();
-        triggerWakeWord();
-        return;
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) {
+        finalText += t;
+      } else {
+        interimText += t;
+      }
+    }
+
+    const displayText = finalText || interimText;
+
+    if (mode === 'wake') {
+      // Проверяем wake word в любом тексте
+      const lower = displayText.toLowerCase();
+      const hasWake = WAKE_WORDS.some(w => lower.includes(w));
+      if (hasWake) {
+        // Есть ли команда после wake word?
+        let command = lower;
+        for (const w of WAKE_WORDS) {
+          command = command.replace(w, '').trim();
+        }
+        command = command.replace(/^[,\.!?\s]+/, '').trim();
+
+        if (command.length > 2) {
+          // Команда уже в одном высказывании: "Оксана, включи Drake"
+          try { rec.abort(); } catch(e) {}
+          recognition = null;
+          currentMode = 'idle';
+          updateWakeUI('listening');
+          isListening = false;
+          document.getElementById('mic-btn').classList.remove('active');
+          document.getElementById('msg-input').value = command;
+          sendMsg();
+          if (alwaysOn) setTimeout(() => startListening('wake'), 1500);
+        } else {
+          // Только wake word — переключаемся в режим команды
+          try { rec.abort(); } catch(e) {}
+          recognition = null;
+          // Звуковой сигнал активации
+          playBeep();
+          setTimeout(() => startListening('command'), 300);
+        }
+      }
+    } else if (mode === 'command' || mode === 'manual') {
+      // Показываем промежуточный текст
+      if (displayText) {
+        document.getElementById('msg-input').value = displayText;
+      }
+
+      if (finalText) {
+        collectedText += finalText + ' ';
+        document.getElementById('msg-input').value = collectedText.trim();
+
+        // Таймер тишины — если 1.5 сек молчания после финального текста
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(() => {
+          const text = collectedText.trim();
+          try { rec.abort(); } catch(e) {}
+          recognition = null;
+          currentMode = 'idle';
+          isListening = false;
+          document.getElementById('mic-btn').classList.remove('active');
+          if (text) {
+            document.getElementById('msg-input').value = text;
+            sendMsg();
+          }
+          if (alwaysOn) setTimeout(() => startListening('wake'), 800);
+        }, 1500);
       }
     }
   };
 
-  wakeRecognition.onend = () => {
-    // Restart if still in always-on mode
-    if (alwaysOn && !isListening && !awaitingCommand) {
-      setTimeout(startWakeListener, 300);
-    }
-  };
+  rec.onerror = (e) => {
+    console.log('Voice error:', e.error, 'mode:', currentMode);
+    if (e.error === 'aborted') return; // намеренная остановка
 
-  wakeRecognition.onerror = e => {
-    if (e.error === 'no-speech' || e.error === 'aborted') {
-      if (alwaysOn && !isListening) setTimeout(startWakeListener, 500);
-    }
-  };
-
-  try { wakeRecognition.start(); } catch(e) {}
-  updateWakeUI('listening');
-}
-
-function triggerWakeWord() {
-  awaitingCommand = true;
-  updateWakeUI('active');
-
-  // Visual + sound feedback
-  document.getElementById('mic-btn').classList.add('active');
-
-  // Show "слухаю" in chat
-  const indicator = document.getElementById('wake-indicator');
-  document.getElementById('wake-text').textContent = lang === 'uk' ? '🎤 Слухаю...' : '🎤 Слушаю...';
-
-  // Start listening for command
-  if (!recognition) return;
-  recognition.lang = lang === 'uk' ? 'uk-UA' : 'ru-RU';
-
-  const commandRecog = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-  commandRecog.continuous = false;
-  commandRecog.interimResults = true;
-  commandRecog.lang = lang === 'uk' ? 'uk-UA' : 'ru-RU';
-  commandRecog.maxAlternatives = 1;
-
-  commandRecog.onresult = e => {
-    let final = '', interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) final += e.results[i][0].transcript;
-      else interim += e.results[i][0].transcript;
-    }
-    if (interim) document.getElementById('msg-input').value = interim;
-    if (final) {
-      document.getElementById('msg-input').value = final;
-      commandRecog.stop();
-    }
-  };
-
-  commandRecog.onend = () => {
-    awaitingCommand = false;
+    recognition = null;
+    currentMode = 'idle';
     isListening = false;
     document.getElementById('mic-btn').classList.remove('active');
-    updateWakeUI('listening');
-    const text = document.getElementById('msg-input').value.trim();
-    if (text) sendMsg();
-    if (alwaysOn) setTimeout(startWakeListener, 800);
+
+    if (alwaysOn) {
+      // Перезапускаем через паузу
+      setTimeout(() => startListening('wake'), 1000);
+    } else {
+      updateWakeUI('');
+    }
   };
 
-  commandRecog.onerror = () => {
-    awaitingCommand = false;
+  rec.onend = () => {
+    if (currentMode === 'idle') return;
+
+    const wasMode = currentMode;
+    currentMode = 'idle';
     isListening = false;
     document.getElementById('mic-btn').classList.remove('active');
-    updateWakeUI('listening');
-    if (alwaysOn) setTimeout(startWakeListener, 800);
+
+    if (wasMode === 'command' || wasMode === 'manual') {
+      const text = collectedText.trim() || document.getElementById('msg-input').value.trim();
+      if (text) {
+        document.getElementById('msg-input').value = text;
+        sendMsg();
+      }
+    }
+
+    if (alwaysOn) {
+      setTimeout(() => startListening('wake'), 600);
+    } else {
+      updateWakeUI('');
+    }
   };
 
   try {
-    isListening = true;
-    commandRecog.start();
+    rec.start();
   } catch(e) {
-    awaitingCommand = false;
-    isListening = false;
+    console.error('Cannot start recognition:', e);
+    currentMode = 'idle';
+    if (alwaysOn) setTimeout(() => startListening('wake'), 2000);
   }
+}
+
+// Короткий звуковой сигнал активации
+function playBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 880;
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.15);
+  } catch(e) {}
 }
 
 function updateWakeUI(state = '') {
   const indicator = document.getElementById('wake-indicator');
   if (!indicator) return;
-  indicator.className = state ? `${state}` : '';
+  indicator.className = state || '';
 
   const texts = {
-    uk: { listening: 'Скажіть "Оксана"...', active: '🎤 Слухаю команду...' },
-    ru: { listening: 'Скажите "Оксана"...', active: '🎤 Слушаю команду...' }
+    uk: { listening: 'Скажіть "Оксана"...', active: '🎤 Слухаю...' },
+    ru: { listening: 'Скажите "Оксана"...', active: '🎤 Слушаю...' }
   };
 
-  if (alwaysOn) {
+  if (alwaysOn || state) {
     indicator.style.display = 'flex';
-    document.getElementById('wake-text').textContent = state === 'active'
-      ? texts[lang].active
-      : texts[lang].listening;
+    document.getElementById('wake-text').textContent =
+      state === 'active' ? texts[lang].active : texts[lang].listening;
   } else {
     indicator.style.display = 'none';
   }
@@ -1630,38 +1678,38 @@ function updateWakeUI(state = '') {
 function toggleAlwaysOn() {
   alwaysOn = !alwaysOn;
   localStorage.setItem('oksana_always_on', alwaysOn);
-  const btn = document.getElementById('always-on-btn');
-  btn.classList.toggle('on', alwaysOn);
+  document.getElementById('always-on-btn').classList.toggle('on', alwaysOn);
 
   if (alwaysOn) {
-    startWakeListener();
+    startListening('wake');
   } else {
-    if (wakeRecognition) { try { wakeRecognition.stop(); } catch(e) {} }
+    currentMode = 'idle';
+    if (recognition) { try { recognition.abort(); } catch(e) {} recognition = null; }
     updateWakeUI('');
   }
 }
 
 function toggleMic() {
-  if (alwaysOn) {
-    // Manual activation while in always-on mode
-    if (wakeRecognition) { try { wakeRecognition.stop(); } catch(e) {} }
-    triggerWakeWord();
+  if (currentMode === 'command' || currentMode === 'manual') {
+    // Останавливаем
+    currentMode = 'idle';
+    if (recognition) { try { recognition.abort(); } catch(e) {} recognition = null; }
+    isListening = false;
+    document.getElementById('mic-btn').classList.remove('active');
+    if (alwaysOn) setTimeout(() => startListening('wake'), 500);
   } else {
-    if (isListening) stopMic();
-    else startMic();
+    // Запускаем ручной режим
+    if (recognition) { try { recognition.abort(); } catch(e) {} recognition = null; }
+    collectedText = '';
+    document.getElementById('msg-input').value = '';
+    startListening('manual');
   }
 }
 
-function startMic() {
-  if (!recognition) return;
-  recognition.lang = lang === 'uk' ? 'uk-UA' : 'ru-RU';
-  try { recognition.start(); } catch(e) {}
-  isListening = true;
-  document.getElementById('mic-btn').classList.add('active');
-}
-
+function startMic() { toggleMic(); }
 function stopMic() {
-  if (recognition) { try { recognition.stop(); } catch(e) {} }
+  currentMode = 'idle';
+  if (recognition) { try { recognition.abort(); } catch(e) {} recognition = null; }
   isListening = false;
   document.getElementById('mic-btn').classList.remove('active');
 }
