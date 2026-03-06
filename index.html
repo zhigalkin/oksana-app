@@ -919,7 +919,7 @@ let wakeRecognition = null;
 let alwaysOn = false;
 let awaitingCommand = false;
 let isListening = false;
-let history = [];
+let chatHistory = [];
 
 const T = {
   uk: {
@@ -997,7 +997,7 @@ window.onload = () => {
     spotifyClientId = cfg.spotifyId || '';
     lang = cfg.lang || 'uk';
     // Exchange code for token
-    history.replaceState({}, '', window.location.pathname);
+    window.history.replaceState({}, '', window.location.pathname);
     exchangeCodeForToken(code, spotifyClientId).then(token => {
       if (token) {
         spotifyToken = token;
@@ -1037,7 +1037,15 @@ function startApp() {
   localStorage.setItem('oksana_config', JSON.stringify({ groq: groqKey, spotifyId: spotifyClientId, lang }));
 
   if (spotifyClientId) {
-    authWithSpotifyPKCE();
+    // Check if we already have a valid token
+    const savedToken = localStorage.getItem('spotify_token');
+    const savedTime = parseInt(localStorage.getItem('spotify_token_time') || '0');
+    if (savedToken && (Date.now() - savedTime) < 3500000) {
+      spotifyToken = savedToken;
+      launchApp();
+    } else {
+      authWithSpotifyPKCE();
+    }
   } else {
     launchApp();
   }
@@ -1090,6 +1098,14 @@ async function authWithSpotifyPKCE() {
 }
 
 function launchApp() {
+  console.log('launchApp called, groqKey:', groqKey ? 'SET' : 'EMPTY', 'spotifyToken:', spotifyToken ? 'SET' : 'EMPTY');
+  
+  // Make sure we have groqKey
+  if (!groqKey) {
+    const cfg = JSON.parse(localStorage.getItem('oksana_config') || '{}');
+    groqKey = cfg.groq || '';
+  }
+
   document.getElementById('setup-screen').style.display = 'none';
   document.getElementById('app').classList.add('visible');
   renderSidebar();
@@ -1166,12 +1182,12 @@ function removeTyping() {
 
 // ── GROQ AI ───────────────────────────────────────────────────────
 async function askGroq(userMsg) {
-  history.push({ role: 'user', content: userMsg });
-  if (history.length > 20) history = history.slice(-20);
+  chatHistory.push({ role: 'user', content: userMsg });
+  if (history.length > 20) chatHistory = chatHistory.slice(-20);
 
   const messages = [
     { role: 'system', content: T[lang].system },
-    ...history
+    ...chatHistory
   ];
 
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -1182,7 +1198,7 @@ async function askGroq(userMsg) {
 
   const data = await res.json();
   const answer = data.choices?.[0]?.message?.content || '...';
-  history.push({ role: 'assistant', content: answer });
+  chatHistory.push({ role: 'assistant', content: answer });
   return answer;
 }
 
