@@ -942,9 +942,12 @@ const T = {
     ],
     system: `Ти — Оксана, дружній голосовий помічник українською мовою.
 Відповідай ТІЛЬКИ українською мовою. Відповіді природні та розмовні (1-4 речення).
-Коли тебе просять знайти музику в Spotify або увімкнути якийсь трек/виконавця — відповідай в форматі JSON:
-{"action":"spotify_search","query":"назва пошуку","type":"track або artist або playlist"}
-Для звичайних питань — відповідай текстом без JSON.`,
+ВАЖЛИВО: Якщо людина згадує будь-якого виконавця, гурт, пісню або жанр — ЗАВЖДИ відповідай тільки JSON:
+{"action":"spotify_search","query":"назва","type":"artist або track або playlist"}
+Правила: виконавець/гурт → type "artist", конкретна пісня → type "track", жанр/настрій → type "playlist".
+Приклади: "увімкни Drake" → {"action":"spotify_search","query":"Drake","type":"artist"}
+"постав рок" → {"action":"spotify_search","query":"rock hits","type":"playlist"}
+Для звичайних питань без музики — відповідай текстом.`,
     noSpotify: '⚠️ Spotify не підключено. Введіть Client ID в налаштуваннях для пошуку музики.',
     found: 'Знайшла для вас',
     notFound: 'Нічого не знайшла в Spotify за цим запитом. Спробуйте інакше.',
@@ -969,9 +972,12 @@ const T = {
     ],
     system: `Ты — Оксана, дружелюбный голосовой помощник. Отвечай ТОЛЬКО на русском языке.
 Ответы естественные и разговорные (1-4 предложения).
-Когда тебя просят найти музыку в Spotify или включить трек/исполнителя — отвечай в формате JSON:
-{"action":"spotify_search","query":"название поиска","type":"track или artist или playlist"}
-Для обычных вопросов — отвечай текстом без JSON.`,
+ВАЖНО: Если человек упоминает исполнителя, группу, песню или жанр — ВСЕГДА отвечай только JSON:
+{"action":"spotify_search","query":"название","type":"artist или track или playlist"}
+Правила: исполнитель/группа → type "artist", конкретная песня → type "track", жанр/настроение → type "playlist".
+Примеры: "включи Drake" → {"action":"spotify_search","query":"Drake","type":"artist"}
+"поставь рок" → {"action":"spotify_search","query":"rock hits","type":"playlist"}
+Для обычных вопросов без музыки — отвечай текстом.`,
     noSpotify: '⚠️ Spotify не подключён. Введите Client ID в настройках для поиска музыки.',
     found: 'Нашла для вас',
     notFound: 'Ничего не нашла в Spotify по этому запросу. Попробуйте иначе.',
@@ -1211,25 +1217,58 @@ async function sendMsg() {
   await sendText(text);
 }
 
+// Quick local music detection (before calling AI)
+function detectMusicIntent(text) {
+  const t = text.toLowerCase();
+  const triggerWords = ['включи', 'увімкни', 'постав', 'поставь', 'грай', 'play',
+    'слухати', 'послухати', 'послушать', 'хочу слушать', 'хочу послухати',
+    'музыку', 'музику', 'пісню', 'песню', 'трек', 'track'];
+  const hasTrigger = triggerWords.some(w => t.includes(w));
+  if (!hasTrigger) return null;
+
+  // Remove trigger words to get artist/song name
+  const cleaned = t
+    .replace(/увімкни|включи|постав|поставь|грай|play|пусти|запусти/gi, '')
+    .replace(/музику|музыку|пісню|песню|трек|track|виконавця|исполнителя/gi, '')
+    .replace(/будь ласка|пожалуйста|мені|мне/gi, '')
+    .replace(/в spotify|у spotify/gi, '')
+    .trim();
+
+  if (!cleaned || cleaned.length < 2) return null;
+  return { query: cleaned, type: 'artist' };
+}
+
 async function sendText(text) {
   addMsg('user', text);
+
+  // Quick music detection without AI
+  const quickMusic = detectMusicIntent(text);
+  if (quickMusic && spotifyToken) {
+    addMsg('assistant', `🎵 ${lang === 'uk' ? 'Шукаю' : 'Ищу'}: <b>${quickMusic.query}</b>...`);
+    await spotifySearch(quickMusic.query, quickMusic.type);
+    return;
+  }
+
   addTyping();
 
   try {
     const answer = await askGroq(text);
     removeTyping();
 
-    // Check if it's a Spotify action
+    // Check if AI returned a Spotify action
     try {
-      const json = JSON.parse(answer.match(/\{.*\}/s)?.[0] || '{}');
-      if (json.action === 'spotify_search') {
-        if (!spotifyToken) {
-          addMsg('assistant', T[lang].noSpotify);
-        } else {
-          addMsg('assistant', `🔍 ${T[lang].found}: "${json.query}"...`);
-          await spotifySearch(json.query, json.type || 'track');
+      const jsonMatch = answer.match(/\{[^{}]*"action"\s*:\s*"spotify_search"[^{}]*\}/s);
+      if (jsonMatch) {
+        const json = JSON.parse(jsonMatch[0]);
+        if (json.action === 'spotify_search') {
+          if (!spotifyToken) {
+            addMsg('assistant', T[lang].noSpotify);
+          } else {
+            addMsg('assistant', `🎵 ${lang === 'uk' ? 'Шукаю' : 'Ищу'}: <b>${json.query}</b>...`);
+            await spotifySearch(json.query, json.type || 'track');
+          }
+          return;
         }
-        return;
       }
     } catch(e) {}
 
@@ -1283,12 +1322,14 @@ function initSpotify() {
 
 async function spotifySearch(query, type = 'track') {
   try {
-    const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=${type}&limit=5`, {
+    // Search
+    const searchType = type === 'artist' ? 'artist' : type === 'playlist' ? 'playlist' : 'track';
+    const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=${searchType}&limit=5`, {
       headers: { 'Authorization': `Bearer ${spotifyToken}` }
     });
     const data = await res.json();
 
-    const items = data.tracks?.items || data.artists?.items || data.playlists?.items || [];
+    const items = data.artists?.items || data.tracks?.items || data.playlists?.items || [];
 
     if (!items.length) {
       addMsg('assistant', T[lang].notFound);
@@ -1296,39 +1337,75 @@ async function spotifySearch(query, type = 'track') {
     }
 
     const first = items[0];
-    const uri = first.uri;
-    const name = first.name;
-    const artist = first.artists?.[0]?.name || '';
-    const img = first.album?.images?.[0]?.url || first.images?.[0]?.url || '';
+    let playUri = first.uri;
+    let displayName = first.name;
+    let displayArtist = '';
+    let displayImg = first.album?.images?.[0]?.url || first.images?.[0]?.url || '';
+    let spotifyUrl = first.external_urls?.spotify || '';
+    let playBody = {};
 
-    // Play it
-    if (deviceId) {
-      const body = type === 'artist' || type === 'playlist'
-        ? { context_uri: uri }
-        : { uris: items.filter(i => i.uri).map(i => i.uri) };
-
-      await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${spotifyToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+    if (type === 'artist') {
+      // Get artist top tracks
+      const topRes = await fetch(`https://api.spotify.com/v1/artists/${first.id}/top-tracks?market=from_token`, {
+        headers: { 'Authorization': `Bearer ${spotifyToken}` }
       });
+      const topData = await topRes.json();
+      const topTracks = topData.tracks || [];
+
+      if (topTracks.length) {
+        // Play top tracks of artist
+        playBody = { uris: topTracks.map(t => t.uri) };
+        displayArtist = lang === 'uk' ? 'Топ треки виконавця' : 'Топ треки исполнителя';
+      } else {
+        // Fallback: play artist context
+        playBody = { context_uri: first.uri };
+      }
+    } else if (type === 'playlist') {
+      playBody = { context_uri: first.uri };
+      displayArtist = lang === 'uk' ? 'Плейлист' : 'Плейлист';
+    } else {
+      // tracks
+      playBody = { uris: items.filter(i => i.uri).map(i => i.uri) };
+      displayArtist = first.artists?.[0]?.name || '';
     }
 
-    // Show card
+    // Play on device
+    if (deviceId) {
+      const playRes = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${spotifyToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(playBody)
+      });
+      if (!playRes.ok && playRes.status !== 204) {
+        const err = await playRes.json().catch(() => ({}));
+        console.error('Play error:', err);
+        if (err?.error?.reason === 'PREMIUM_REQUIRED') {
+          addMsg('assistant', lang === 'uk'
+            ? '❌ Для відтворення потрібен Spotify Premium. Відкрити в Spotify?'
+            : '❌ Для воспроизведения нужен Spotify Premium. Открыть в Spotify?',
+            `<div class="spotify-card"><div class="spotify-card-info"><div class="spotify-card-title">${displayName}</div></div>
+            <button class="spotify-play-btn" onclick="window.open('${spotifyUrl}','_blank')">🎵</button></div>`
+          );
+          return;
+        }
+      }
+    }
+
+    // Card
     const card = `
       <div class="spotify-card">
-        <img src="${img}" alt="" onerror="this.style.display='none'">
+        <img src="${displayImg}" alt="" onerror="this.style.display='none'">
         <div class="spotify-card-info">
-          <div class="spotify-card-title">${name}</div>
-          <div class="spotify-card-artist">${artist}</div>
+          <div class="spotify-card-title">${displayName}</div>
+          <div class="spotify-card-artist">${displayArtist}</div>
         </div>
-        <button class="spotify-play-btn" onclick="window.open('${first.external_urls?.spotify}','_blank')">🎵</button>
+        <button class="spotify-play-btn" onclick="window.open('${spotifyUrl}','_blank')">🎵</button>
       </div>`;
 
-    addMsg('assistant', `✅ ${lang === 'uk' ? 'Граю' : 'Играю'}: <b>${name}</b>`, card);
+    addMsg('assistant', `✅ ${lang === 'uk' ? 'Граю' : 'Играю'}: <b>${displayName}</b>`, card);
 
   } catch(e) {
-    console.error(e);
+    console.error('Spotify search error:', e);
     addMsg('assistant', T[lang].notFound);
   }
 }
