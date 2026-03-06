@@ -4,983 +4,1234 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Оксана — Голосовий помічник</title>
-<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;700;900&family=Geologica:wght@300;400;500&display=swap" rel="stylesheet">
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;700&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
-:root {
-  --bg:#080c14;--surface:#0e1420;--card:#131c2e;--card2:#1a2540;
-  --accent:#4f8ef7;--accent2:#7c3aed;--red:#ef4444;--gold:#f59e0b;
-  --green:#10b981;--text:#dde4f0;--muted:#4a5568;
-  --border:rgba(255,255,255,0.07);--glow:rgba(79,142,247,0.25);
-}
-*{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);color:var(--text);font-family:'Geologica',sans-serif;
-  min-height:100vh;display:flex;flex-direction:column;align-items:center;overflow-x:hidden;}
-.bg-mesh{position:fixed;inset:0;z-index:0;pointer-events:none;
-  background:radial-gradient(ellipse 60% 50% at 10% 10%,rgba(79,142,247,.12) 0%,transparent 60%),
-    radial-gradient(ellipse 50% 60% at 90% 80%,rgba(124,58,237,.1) 0%,transparent 60%),
-    radial-gradient(ellipse 40% 40% at 50% 50%,rgba(16,185,129,.04) 0%,transparent 70%);}
-.app{position:relative;z-index:1;width:100%;max-width:500px;padding:20px 18px 40px;display:flex;flex-direction:column;}
-header{display:flex;align-items:center;justify-content:space-between;padding:16px 0 24px;}
-.logo{display:flex;align-items:center;gap:10px;}
-.logo-mark{width:38px;height:38px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 0 16px var(--glow);}
-.logo-name{font-family:'Unbounded',sans-serif;font-size:20px;font-weight:900;letter-spacing:-.5px;background:linear-gradient(135deg,#e2e8f0,var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-.header-right{display:flex;align-items:center;gap:8px;}
-.lang-switch{display:flex;align-items:center;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px;}
-.lang-btn{background:none;border:none;cursor:pointer;color:var(--muted);font-family:'Geologica',sans-serif;font-size:11px;font-weight:500;padding:5px 9px;border-radius:7px;transition:all .2s;white-space:nowrap;}
-.lang-btn.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;}
-.g-btn{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 14px;cursor:pointer;color:var(--text);font-family:'Geologica',sans-serif;font-size:13px;transition:all .2s;}
-.g-btn:hover{border-color:rgba(79,142,247,.4);background:rgba(79,142,247,.08);}
-.g-btn .avatar{width:24px;height:24px;border-radius:50%;}
-.mic-section{display:flex;flex-direction:column;align-items:center;padding:24px 0 20px;gap:16px;}
-.mic-btn{width:130px;height:130px;border-radius:50%;border:none;cursor:pointer;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 0 40px var(--glow);position:relative;transition:transform .15s ease;display:flex;align-items:center;justify-content:center;font-size:46px;outline:none;}
-.mic-btn::before{content:'';position:absolute;inset:-6px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));opacity:.2;animation:ring 2.5s ease-in-out infinite;}
-.mic-btn:hover{transform:scale(1.04);}.mic-btn:active{transform:scale(.96);}
-.mic-btn.listening{background:linear-gradient(135deg,var(--red),#f97316);box-shadow:0 0 50px rgba(239,68,68,.45);animation:pulse 1s ease-in-out infinite;}
-.mic-btn.thinking{background:linear-gradient(135deg,var(--gold),#f97316);box-shadow:0 0 50px rgba(245,158,11,.4);}
-.mic-btn.speaking{background:linear-gradient(135deg,var(--green),#0891b2);box-shadow:0 0 50px rgba(16,185,129,.4);}
-@keyframes ring{0%,100%{transform:scale(1);opacity:.2}50%{transform:scale(1.1);opacity:.08}}
-@keyframes pulse{0%,100%{box-shadow:0 0 40px rgba(239,68,68,.4)}50%{box-shadow:0 0 80px rgba(239,68,68,.7)}}
-.status{font-family:'Unbounded',sans-serif;font-size:11px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:var(--muted);transition:color .3s;}
-.status.listening{color:var(--red);}.status.thinking{color:var(--gold);}.status.speaking{color:var(--green);}
-.wave{display:flex;align-items:center;gap:3px;height:32px;opacity:0;transition:opacity .3s;}
-.wave.show{opacity:1;}
-.wb{width:3px;border-radius:2px;background:linear-gradient(to top,var(--accent),var(--accent2));animation:wv .7s ease-in-out infinite;transform-origin:bottom;}
-@keyframes wv{0%,100%{height:4px}50%{height:26px}}
-.chat-area{display:flex;flex-direction:column;gap:10px;margin-bottom:18px;}
-.bubble{border-radius:14px;padding:12px 16px;font-size:14px;line-height:1.65;animation:fadeUp .3s ease;}
-@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.bubble.user{background:var(--card2);border:1px solid var(--border);align-self:flex-end;max-width:85%;}
-.bubble.ai{background:linear-gradient(135deg,rgba(79,142,247,.1),rgba(124,58,237,.08));border:1px solid rgba(79,142,247,.18);align-self:flex-start;max-width:92%;display:flex;gap:10px;}
-.ai-avatar{font-size:18px;flex-shrink:0;padding-top:2px;}
-.bubble.placeholder{background:transparent;border:1px dashed rgba(255,255,255,.08);color:var(--muted);font-size:13px;text-align:center;align-self:stretch;}
-.player-card{background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:18px;display:none;}
-.player-card.show{display:block;}
-.player-info{display:flex;align-items:center;gap:12px;padding:14px 16px 10px;}
-.player-thumb{width:52px;height:52px;border-radius:8px;object-fit:cover;background:var(--card2);flex-shrink:0;}
-.player-meta{flex:1;min-width:0;}
-.player-title{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.player-channel{font-size:12px;color:var(--muted);margin-top:2px;}
-.player-controls{display:flex;align-items:center;gap:10px;padding:0 16px 14px;}
-.ctrl-btn{background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;padding:4px;transition:transform .15s;border-radius:6px;}
-.ctrl-btn:hover{transform:scale(1.15);color:var(--accent);}
-.ctrl-btn.main{font-size:28px;color:var(--accent);}
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c28;
+    --accent: #1DB954;
+    --accent2: #FFD700;
+    --text: #f0f0f0;
+    --text2: #888;
+    --glow: rgba(29, 185, 84, 0.3);
+    --radius: 16px;
+  }
 
-.volume-row{display:flex;align-items:center;gap:8px;flex:1;}
-.vol-icon{font-size:16px;color:var(--muted);}
-input[type=range]{flex:1;accent-color:var(--accent);height:3px;}
-.results-list{display:none;flex-direction:column;gap:8px;margin-bottom:16px;}
-.results-list.show{display:flex;}
-.result-item{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 14px;cursor:pointer;transition:all .2s;}
-.result-item:hover{border-color:rgba(79,142,247,.35);background:rgba(79,142,247,.07);}
-.result-thumb{width:44px;height:44px;border-radius:6px;object-fit:cover;flex-shrink:0;}
-.result-info{flex:1;min-width:0;}
-.result-title{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.result-ch{font-size:11px;color:var(--muted);margin-top:2px;}
-.result-play{font-size:22px;color:var(--accent);}
-.section-label{font-family:'Unbounded',sans-serif;font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
-.cmds{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px;}
-.cmd{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:11px 13px;cursor:pointer;color:var(--text);font-family:'Geologica',sans-serif;font-size:12px;transition:all .2s;display:flex;align-items:center;gap:8px;text-align:left;}
-.cmd:hover{border-color:rgba(79,142,247,.4);background:rgba(79,142,247,.07);transform:translateY(-1px);}
-.cmd .ico{font-size:18px;}
-.playlist-section{margin-bottom:18px;display:none;}
-.playlist-section.show{display:block;}
-.pl-list{display:flex;flex-direction:column;gap:6px;}
-.pl-item{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;cursor:pointer;transition:all .2s;}
-.pl-item:hover{border-color:rgba(79,142,247,.35);background:rgba(79,142,247,.07);}
-.pl-icon{font-size:20px;}.pl-name{font-size:13px;}
-.pl-count{font-size:11px;color:var(--muted);margin-left:auto;}
-.settings{display:flex;flex-direction:column;gap:8px;}
-.setting-row{display:flex;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--border);border-radius:11px;padding:12px 16px;}
-.setting-row .lbl{font-size:13px;display:flex;align-items:center;gap:9px;}
-.setting-row .ico{font-size:18px;}
-.toggle{width:42px;height:22px;background:var(--muted);border-radius:11px;position:relative;cursor:pointer;border:none;transition:background .3s;}
-.toggle.on{background:var(--accent);}
-.toggle::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;background:white;border-radius:50%;transition:transform .3s;}
-.toggle.on::after{transform:translateX(20px);}
-.dots{display:inline-flex;gap:4px;vertical-align:middle;}
-.dot{width:5px;height:5px;background:var(--gold);border-radius:50%;animation:blink 1.2s infinite;}
-.dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
-@keyframes blink{0%,100%{opacity:.2;transform:scale(.8)}50%{opacity:1;transform:scale(1.2)}}
-.hint{text-align:center;font-size:11px;color:var(--muted);padding:16px 0 0;}
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Ambient background */
+  body::before {
+    content: '';
+    position: fixed;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(29,185,84,0.08) 0%, transparent 70%);
+    top: -100px; left: -100px;
+    pointer-events: none;
+    animation: drift 8s ease-in-out infinite alternate;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(255,215,0,0.05) 0%, transparent 70%);
+    bottom: -100px; right: -100px;
+    pointer-events: none;
+    animation: drift 10s ease-in-out infinite alternate-reverse;
+  }
+
+  @keyframes drift {
+    from { transform: translate(0,0); }
+    to { transform: translate(40px, 30px); }
+  }
+
+  /* SETUP SCREEN */
+  #setup-screen {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg);
+    z-index: 100;
+    flex-direction: column;
+    gap: 32px;
+    padding: 24px;
+  }
+
+  .setup-card {
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 24px;
+    padding: 40px;
+    max-width: 480px;
+    width: 100%;
+  }
+
+  .setup-logo {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--accent);
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+  .setup-sub {
+    text-align: center;
+    color: var(--text2);
+    font-size: 14px;
+    margin-bottom: 32px;
+  }
+
+  .setup-field {
+    margin-bottom: 16px;
+  }
+
+  .setup-field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text2);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .setup-field input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: 'Inter', monospace;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .setup-field input:focus {
+    border-color: var(--accent);
+  }
+
+  .setup-field .hint {
+    font-size: 11px;
+    color: var(--text2);
+    margin-top: 6px;
+  }
+
+  .setup-field .hint a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .lang-toggle {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+
+  .lang-btn {
+    flex: 1;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: var(--surface2);
+    color: var(--text2);
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    transition: all 0.2s;
+  }
+
+  .lang-btn.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+
+  .start-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 12px;
+    font-family: 'Unbounded', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+
+  .start-btn:hover {
+    background: #1ed760;
+    transform: translateY(-1px);
+  }
+
+  /* MAIN APP */
+  #app {
+    display: none;
+    height: 100vh;
+    grid-template-rows: 60px 1fr 180px;
+    grid-template-columns: 280px 1fr;
+    grid-template-areas:
+      "header header"
+      "sidebar main"
+      "player player";
+  }
+
+  #app.visible {
+    display: grid;
+  }
+
+  /* HEADER */
+  header {
+    grid-area: header;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    background: rgba(10,10,15,0.9);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    position: relative;
+    z-index: 10;
+  }
+
+  .logo {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-dot {
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5); opacity: 0.6; }
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .lang-switch {
+    display: flex;
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+  }
+
+  .lang-switch button {
+    padding: 5px 10px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text2);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .lang-switch button.active {
+    background: var(--accent);
+    color: #000;
+    font-weight: 600;
+  }
+
+  /* SIDEBAR */
+  aside {
+    grid-area: sidebar;
+    background: var(--surface);
+    border-right: 1px solid rgba(255,255,255,0.05);
+    overflow-y: auto;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .sidebar-section h3 {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+    padding: 0 8px;
+  }
+
+  .quick-cmd {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .cmd-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+    font-family: 'Inter', sans-serif;
+    width: 100%;
+  }
+
+  .cmd-btn:hover {
+    background: var(--surface2);
+    color: var(--accent);
+  }
+
+  .cmd-btn .icon {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--surface2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  /* MAIN CHAT AREA */
+  main {
+    grid-area: main;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scroll-behavior: smooth;
+  }
+
+  #chat::-webkit-scrollbar { width: 4px; }
+  #chat::-webkit-scrollbar-track { background: transparent; }
+  #chat::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 2px; }
+
+  .msg {
+    display: flex;
+    gap: 12px;
+    animation: msg-in 0.3s ease;
+    max-width: 80%;
+  }
+
+  @keyframes msg-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg.user {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+  }
+
+  .msg-avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+    background: var(--surface2);
+  }
+
+  .msg.assistant .msg-avatar {
+    background: linear-gradient(135deg, var(--accent), #0d9944);
+  }
+
+  .msg-bubble {
+    padding: 12px 16px;
+    border-radius: 16px;
+    font-size: 14px;
+    line-height: 1.6;
+    max-width: 100%;
+  }
+
+  .msg.assistant .msg-bubble {
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-bottom-left-radius: 4px;
+  }
+
+  .msg.user .msg-bubble {
+    background: var(--accent);
+    color: #000;
+    border-bottom-right-radius: 4px;
+  }
+
+  /* Spotify card in chat */
+  .spotify-card {
+    background: var(--surface2);
+    border: 1px solid rgba(29,185,84,0.3);
+    border-radius: 12px;
+    padding: 14px;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .spotify-card img {
+    width: 56px; height: 56px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: var(--surface);
+  }
+
+  .spotify-card-info { flex: 1; min-width: 0; }
+
+  .spotify-card-title {
+    font-weight: 600;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .spotify-card-artist {
+    font-size: 12px;
+    color: var(--text2);
+    margin-top: 2px;
+  }
+
+  .spotify-play-btn {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .spotify-play-btn:hover {
+    transform: scale(1.1);
+    background: #1ed760;
+  }
+
+  /* INPUT AREA */
+  .input-area {
+    padding: 16px 24px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    background: var(--bg);
+  }
+
+  #msg-input {
+    flex: 1;
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: 'Inter', sans-serif;
+    outline: none;
+    resize: none;
+    min-height: 44px;
+    max-height: 120px;
+    transition: border-color 0.2s;
+    line-height: 1.5;
+  }
+
+  #msg-input:focus { border-color: var(--accent); }
+  #msg-input::placeholder { color: var(--text2); }
+
+  .mic-btn, .send-btn {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .mic-btn {
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text);
+  }
+
+  .mic-btn:hover, .mic-btn.active {
+    background: #ff4444;
+    border-color: #ff4444;
+    color: white;
+    animation: mic-pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,68,68,0.4); }
+    50% { box-shadow: 0 0 0 10px rgba(255,68,68,0); }
+  }
+
+  .send-btn {
+    background: var(--accent);
+    color: #000;
+  }
+
+  .send-btn:hover {
+    background: #1ed760;
+    transform: translateY(-1px);
+  }
+
+  /* PLAYER */
+  #player {
+    grid-area: player;
+    background: var(--surface);
+    border-top: 1px solid rgba(255,255,255,0.05);
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .player-track {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  #track-art {
+    width: 56px; height: 56px;
+    border-radius: 8px;
+    background: var(--surface2);
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .track-meta { flex: 1; min-width: 0; }
+
+  #track-name {
+    font-weight: 600;
+    font-size: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #track-artist {
+    font-size: 12px;
+    color: var(--text2);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .player-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+
+  .ctrl-btn {
+    background: none;
+    border: none;
+    color: var(--text2);
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.15s;
+    padding: 6px;
+    border-radius: 50%;
+  }
+
+  .ctrl-btn:hover { color: var(--text); transform: scale(1.1); }
+
+  #play-pause {
+    width: 44px; height: 44px;
+    background: var(--accent);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  #play-pause:hover { background: #1ed760; transform: scale(1.05); }
+
+  .player-progress {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--text2);
+  }
+
+  #progress-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 1s linear;
+  }
+
+  .player-vol {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+  }
+
+  #volume-slider {
+    width: 80px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  /* Typing indicator */
+  .typing {
+    display: flex;
+    gap: 4px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border-radius: 16px;
+    border-bottom-left-radius: 4px;
+    width: fit-content;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .typing span {
+    width: 6px; height: 6px;
+    background: var(--text2);
+    border-radius: 50%;
+    animation: bounce 1.2s ease-in-out infinite;
+  }
+
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-8px); }
+  }
+
+  /* Scrollbar */
+  aside::-webkit-scrollbar { width: 4px; }
+  aside::-webkit-scrollbar-track { background: transparent; }
+  aside::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 2px; }
+
+  /* No spotify warning */
+  .warning-banner {
+    background: rgba(255,215,0,0.1);
+    border: 1px solid rgba(255,215,0,0.3);
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--accent2);
+    margin-bottom: 8px;
+    line-height: 1.5;
+  }
+
+  @media (max-width: 768px) {
+    #app.visible { grid-template-columns: 1fr; grid-template-rows: 60px 1fr 160px; grid-template-areas: "header" "main" "player"; }
+    aside { display: none; }
+  }
 </style>
 </head>
 <body>
-<div class="bg-mesh"></div>
-<div class="app">
+
+<!-- SETUP SCREEN -->
+<div id="setup-screen">
+  <div class="setup-card">
+    <div class="setup-logo">🌻 ОКСАНА</div>
+    <div class="setup-sub">Голосовий помічник зі Spotify</div>
+
+    <div class="lang-toggle">
+      <button class="lang-btn active" onclick="selectLang('uk', this)">🇺🇦 Українська</button>
+      <button class="lang-btn" onclick="selectLang('ru', this)">🇷🇺 Русский</button>
+    </div>
+
+    <div class="setup-field">
+      <label>Groq API Key</label>
+      <input type="password" id="setup-groq" placeholder="gsk_...">
+      <div class="hint">Безкоштовно на <a href="https://console.groq.com" target="_blank">console.groq.com</a></div>
+    </div>
+
+    <div class="setup-field">
+      <label>Spotify Client ID</label>
+      <input type="text" id="setup-spotify-id" placeholder="32-символьний Client ID">
+      <div class="hint"><a href="https://developer.spotify.com/dashboard" target="_blank">developer.spotify.com</a> → Create App → Client ID</div>
+    </div>
+
+    <div class="setup-field">
+      <label>Spotify Redirect URI (вкажіть в Spotify App)</label>
+      <input type="text" id="setup-redirect" readonly style="opacity:0.6; cursor:default;">
+      <div class="hint">Скопіюйте це у Spotify App Settings → Redirect URIs</div>
+    </div>
+
+    <button class="start-btn" onclick="startApp()">ЗАПУСТИТИ ОКСАНУ ▶</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
   <header>
     <div class="logo">
-      <div class="logo-mark">🌻</div>
-      <div class="logo-name">ОКСАНА</div>
+      <div class="logo-dot"></div>
+      ОКСАНА
     </div>
     <div class="header-right">
       <div class="lang-switch">
-        <button class="lang-btn active" id="langUk" onclick="setLang('uk')">🇺🇦 УКР</button>
-        <button class="lang-btn" id="langRu" onclick="setLang('ru')">🇷🇺 РУС</button>
+        <button id="lang-uk" class="active" onclick="switchLang('uk')">🇺🇦 УКР</button>
+        <button id="lang-ru" onclick="switchLang('ru')">🇷🇺 РУС</button>
       </div>
-      <button class="g-btn" id="gBtn" onclick="handleGoogleAuth()">
-        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-        <span id="gBtnText">Увійти</span>
-      </button>
     </div>
   </header>
 
-  <div class="mic-section">
-    <button class="mic-btn" id="micBtn" onclick="toggleListening()">🎤</button>
-    <div class="status" id="status">НАТИСНІТЬ ДЛЯ РОЗМОВИ</div>
-    <div class="wave" id="wave">
-      <div class="wb" style="animation-delay:0s"></div><div class="wb" style="animation-delay:.08s"></div>
-      <div class="wb" style="animation-delay:.16s"></div><div class="wb" style="animation-delay:.12s"></div>
-      <div class="wb" style="animation-delay:.04s"></div><div class="wb" style="animation-delay:.2s"></div>
-      <div class="wb" style="animation-delay:.1s"></div>
+  <aside>
+    <div class="sidebar-section">
+      <h3 id="sidebar-title">Швидкі команди</h3>
+      <div class="quick-cmd" id="quick-cmds"></div>
     </div>
-  </div>
+    <div class="sidebar-section">
+      <h3 id="sidebar-spotify-title">Музика</h3>
+      <div class="quick-cmd" id="music-cmds"></div>
+    </div>
+  </aside>
 
-  <div class="player-card" id="playerCard">
-    <!-- Visible iframe - Safari requires visible player with user interaction -->
-    <div class="yt-frame-wrap" id="ytFrameWrap">
-      <iframe id="ytIframe"
-        width="100%" height="200"
-        frameborder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowfullscreen
-        style="border-radius:12px 12px 0 0;display:block;">
-      </iframe>
+  <main>
+    <div id="chat"></div>
+    <div class="input-area">
+      <button class="mic-btn" id="mic-btn" onclick="toggleMic()" title="Голосовий ввід">🎤</button>
+      <textarea id="msg-input" placeholder="Напишіть або скажіть щось..." rows="1"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg()}"
+        oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea>
+      <button class="send-btn" onclick="sendMsg()">➤</button>
     </div>
-    <div class="player-info">
-      <img class="player-thumb" id="playerThumb" src="" alt="">
-      <div class="player-meta">
-        <div class="player-title" id="playerTitle">—</div>
-        <div class="player-channel" id="playerChannel">—</div>
+  </main>
+
+  <div id="player">
+    <div class="player-track">
+      <img id="track-art" src="" alt="">
+      <div class="track-meta">
+        <div id="track-name">—</div>
+        <div id="track-artist">—</div>
+      </div>
+      <div class="player-vol">
+        🔈 <input type="range" id="volume-slider" min="0" max="100" value="80" oninput="setVolume(this.value)">
       </div>
     </div>
     <div class="player-controls">
       <button class="ctrl-btn" onclick="prevTrack()">⏮</button>
-      <button class="ctrl-btn main" id="playPauseBtn" onclick="togglePlayPause()">▶️</button>
+      <button id="play-pause" onclick="togglePlay()">▶</button>
       <button class="ctrl-btn" onclick="nextTrack()">⏭</button>
-      <div class="volume-row">
-        <span class="vol-icon">🔈</span>
-        <input type="range" id="volRange" min="0" max="100" value="80" oninput="setVolume(this.value)">
-        <span class="vol-icon">🔊</span>
+    </div>
+    <div class="player-progress">
+      <span id="time-cur">0:00</span>
+      <div id="progress-bar" onclick="seekTo(event)">
+        <div id="progress-fill"></div>
       </div>
+      <span id="time-total">0:00</span>
     </div>
   </div>
-
-  <div class="results-list" id="resultsList"></div>
-
-  <div class="chat-area" id="chatArea">
-    <div class="bubble placeholder" id="placeholderBubble">Я Оксана 🌻 Скажіть або напишіть що завгодно.<br>Можу грати музику з YouTube, розповідати факти, жарти та багато іншого!</div>
-  </div>
-
-  <div class="playlist-section" id="playlistSection">
-    <div class="section-label" id="plLabel">Ваші плейлисти</div>
-    <div class="pl-list" id="plList"></div>
-  </div>
-
-  <div class="section-label" id="cmdsLabel">Швидкі команди</div>
-  <div class="cmds" id="cmdsGrid"></div>
-
-  <div class="section-label" id="settingsLabel">Налаштування</div>
-  <div class="settings">
-    <div class="setting-row">
-      <div class="lbl"><span class="ico">🎵</span><span id="musicSourceLabel">Музыка</span></div>
-      <div style="display:flex;gap:6px;">
-        <button class="lang-btn" id="srcYT" onclick="setMusicSource('yt')">▶ YouTube</button>
-        <button class="lang-btn" id="srcVK" onclick="setMusicSource('vk')">VK</button>
-        <button class="lang-btn active" id="srcSP" onclick="setMusicSource('sp')">🎵 Spotify</button>
-      </div>
-    </div>
-    <div class="setting-row">
-      <div class="lbl"><span class="ico">🔊</span><span id="voiceReplyLabel">Голосова відповідь</span></div>
-      <button class="toggle on" id="voiceToggle" onclick="toggleVoice()"></button>
-    </div>
-    <div class="setting-row">
-      <div class="lbl"><span class="ico">⚡</span><span id="speedLabel">Швидкість</span></div>
-      <input type="range" min="0.7" max="1.5" step="0.1" value="1" style="width:80px;accent-color:var(--accent)" oninput="speechRate=parseFloat(this.value)">
-    </div>
-  </div>
-  <p class="hint" id="hintText">Пробіл — активувати мікрофон • Команди: "увімкни [назва]", "пауза", "наступний"</p>
 </div>
 
 <script>
-const GOOGLE_CLIENT_ID='1098424775961-4cdjcjgvhpf2ejr5f1uajf8acql20bik.apps.googleusercontent.com';
-const YT_API_KEY='AIzaSyBt0EmOEsmYMcoUxajSWwZCqh6qal4S65I';
-const VK_APP_ID='54473967';
-const VK_TOKEN='c453db57c453db57c453db57ebc76cefb8cc453c453db57adf8dee4bd7c0556bc3f4047';
-const SPOTIFY_CLIENT_ID='4a9aa1259c644ab8a5761808d9f8700d';
-const SPOTIFY_CLIENT_SECRET='48f92c42453148ebb10eb4864dcc56e8';
-const SPOTIFY_REDIRECT='https://zhigalkin.github.io/oksana-app/';
+// ── STATE ────────────────────────────────────────────────────────
+let lang = 'uk';
+let groqKey = '';
+let spotifyClientId = '';
+let spotifyToken = '';
+let spotifyPlayer = null;
+let deviceId = '';
+let isPlaying = false;
+let currentTrack = null;
+let progressInterval = null;
+let trackPosition = 0;
+let trackDuration = 0;
+let recognition = null;
+let isListening = false;
+let history = [];
 
-const i18n={
-  uk:{
-    speechLang:'uk-UA',voiceLang:'uk',signIn:'Увійти',
-    pressToTalk:'НАТИСНІТЬ ДЛЯ РОЗМОВИ',listening:'СЛУХАЮ...',thinking:'ДУМАЮ',speaking:'ГОВОРЮ...',
-    placeholder:'Я Оксана 🌻 Скажіть або напишіть що завгодно.<br>Можу грати музику з YouTube, розповідати факти, жарти та багато іншого!',
-    yourPlaylists:'Ваші плейлисти',quickCmds:'Швидкі команди',settingsTitle:'Налаштування',
-    voiceReply:'Голосова відповідь',speed:'Швидкість',
-    hint:'Пробіл — активувати мікрофон • Команди: "увімкни [назва]", "пауза", "наступний"',
-    cmds:[
-      {ico:'🎵',label:'Популярне',text:'включи что-нибудь популярное'},
-      {ico:'📋',label:'Мої плейлисти',text:'покажи мої плейлисти'},
-      {ico:'😄',label:'Жарт',text:'розкажи жарт'},
-      {ico:'✨',label:'Факт',text:'розкажи цікавий факт'},
-      {ico:'⏭',label:'Наступний',text:'наступний трек'},
-      {ico:'⏹',label:'Стоп',text:'стоп музика'},
+const T = {
+  uk: {
+    placeholder: 'Напишіть або скажіть щось...',
+    greeting: 'Привіт! Я Оксана 🌻 Кажіть або пишіть — відповім та знайду музику в Spotify!',
+    thinking: 'Думаю...',
+    sidebarTitle: 'Швидкі команди',
+    sidebarSpotify: 'Музика',
+    cmds: [
+      { icon: '🎵', text: 'Увімкни музику', cmd: 'увімкни музику' },
+      { icon: '😂', text: 'Розкажи жарт', cmd: 'розкажи жарт' },
+      { icon: '🌤', text: 'Яка погода?', cmd: 'яка зараз погода?' },
+      { icon: '💡', text: 'Цікавий факт', cmd: 'розкажи цікавий факт' },
     ],
-    musicTriggers:['увімкни','відтвори','постав','грай','включи','play'],
-    pauseTriggers:['пауза','стоп','зупини','зупинись','тихо'],
-    nextTriggers:['наступний','далі','skip'],
-    prevTriggers:['попередній','назад','previous'],
-    plTriggers:['мої плейлисти','покажи плейлисти','плейлисти'],
-    searching:q=>`🔍 Шукаю "${q}" на YouTube...`,
-    notFound:'Нічого не знайшла. Спробуйте інший запит.',
-    paused:'Поставила на паузу ⏸',pausedSpeak:'Добре, поставила на паузу',
-    next:'Наступний трек ⏭',nextSpeak:'Наступний трек',
-    prev:'Попередній трек ⏮',prevSpeak:'Попередній трек',
-    plShown:'Ось ваші плейлисти 📋',plSpeak:'Ось ваші плейлисти',
-    loginFirst:'Спочатку увійдіть в Google акаунт!',loginSpeak:'Увійдіть в Google акаунт',
-    playingPl:(n,c)=>`▶️ Вмикаю "${n}" — ${c} треків!`,
-    playingPlSpeak:n=>`Вмикаю плейлист ${n}`,
-    emptyPl:'Плейлист порожній.',plError:'Помилка завантаження.',
-    authError:'Помилка авторизації.',
-    welcome:n=>`Вітаю, ${n}! 🌻 Маю доступ до ваших плейлистів. Скажіть "увімкни [назву пісні]"!`,
-    signedOut:'Ви вийшли з акаунту.',
-    connError:"Помилка з'єднання. Перевірте інтернет.",
-    micDenied:'Дозвольте доступ до мікрофона.',noSpeech:'Нічого не почула. Спробуйте ще раз.',
-    videoCount:n=>`${n} відео`,
-    defaultMusic:'популярна музика',
-    aiSystem:(u,m)=>`Ти — Оксана, дружній голосовий помічник. Відповідай ТІЛЬКИ українською. Відповіді короткі та природні (1-3 речення). Без форматування (*,#,-). ${u} ${m} Якщо питають про музику — підкажи "увімкни [назву]".`,
+    musicCmds: [
+      { icon: '🎸', text: 'Рок музика', cmd: 'знайди рок музику в spotify' },
+      { icon: '🎹', text: 'Класика', cmd: 'знайди класичну музику в spotify' },
+      { icon: '💃', text: 'Для танців', cmd: 'знайди музику для танців в spotify' },
+      { icon: '😌', text: 'Релакс', cmd: 'знайди спокійну музику в spotify' },
+    ],
+    system: `Ти — Оксана, дружній голосовий помічник українською мовою.
+Відповідай ТІЛЬКИ українською мовою. Відповіді природні та розмовні (1-4 речення).
+Коли тебе просять знайти музику в Spotify або увімкнути якийсь трек/виконавця — відповідай в форматі JSON:
+{"action":"spotify_search","query":"назва пошуку","type":"track або artist або playlist"}
+Для звичайних питань — відповідай текстом без JSON.`,
+    noSpotify: '⚠️ Spotify не підключено. Введіть Client ID в налаштуваннях для пошуку музики.',
+    found: 'Знайшла для вас',
+    notFound: 'Нічого не знайшла в Spotify за цим запитом. Спробуйте інакше.',
   },
-  ru:{
-    speechLang:'ru-RU',voiceLang:'ru',signIn:'Войти',
-    pressToTalk:'НАЖМИТЕ ДЛЯ РАЗГОВОРА',listening:'СЛУШАЮ...',thinking:'ДУМАЮ',speaking:'ГОВОРЮ...',
-    placeholder:'Я Оксана 🌻 Скажите или напишите что угодно.<br>Могу играть музыку с YouTube, рассказывать факты, шутки и многое другое!',
-    yourPlaylists:'Ваши плейлисты',quickCmds:'Быстрые команды',settingsTitle:'Настройки',
-    voiceReply:'Голосовой ответ',speed:'Скорость',
-    hint:'Пробел — активировать микрофон • Команды: "включи [название]", "пауза", "следующий"',
-    cmds:[
-      {ico:'🎵',label:'Популярное',text:'включи что-нибудь популярное'},
-      {ico:'📋',label:'Мои плейлисты',text:'покажи мои плейлисты'},
-      {ico:'😄',label:'Анекдот',text:'расскажи анекдот'},
-      {ico:'✨',label:'Факт',text:'расскажи интересный факт'},
-      {ico:'⏭',label:'Следующий',text:'следующий трек'},
-      {ico:'⏹',label:'Стоп',text:'стоп музыка'},
+  ru: {
+    placeholder: 'Напишите или скажите что-нибудь...',
+    greeting: 'Привет! Я Оксана 🌻 Говорите или пишите — отвечу и найду музыку в Spotify!',
+    thinking: 'Думаю...',
+    sidebarTitle: 'Быстрые команды',
+    sidebarSpotify: 'Музыка',
+    cmds: [
+      { icon: '🎵', text: 'Включи музыку', cmd: 'включи музыку' },
+      { icon: '😂', text: 'Расскажи анекдот', cmd: 'расскажи анекдот' },
+      { icon: '🌤', text: 'Какая погода?', cmd: 'какая сейчас погода?' },
+      { icon: '💡', text: 'Интересный факт', cmd: 'расскажи интересный факт' },
     ],
-    musicTriggers:['включи','воспроизведи','поставь','играй','play','увімкни'],
-    pauseTriggers:['пауза','стоп','останови','тихо','замолчи'],
-    nextTriggers:['следующий','дальше','skip','наступний'],
-    prevTriggers:['предыдущий','назад','previous'],
-    plTriggers:['мои плейлисты','покажи плейлисты','плейлисты'],
-    searching:q=>`🔍 Ищу "${q}" на YouTube...`,
-    notFound:'Ничего не нашла. Попробуйте другой запрос.',
-    paused:'Поставила на паузу ⏸',pausedSpeak:'Хорошо, поставила на паузу',
-    next:'Следующий трек ⏭',nextSpeak:'Следующий трек',
-    prev:'Предыдущий трек ⏮',prevSpeak:'Предыдущий трек',
-    plShown:'Вот ваши плейлисты 📋',plSpeak:'Вот ваши плейлисты',
-    loginFirst:'Сначала войдите в Google аккаунт!',loginSpeak:'Войдите в Google аккаунт',
-    playingPl:(n,c)=>`▶️ Включаю "${n}" — ${c} треков!`,
-    playingPlSpeak:n=>`Включаю плейлист ${n}`,
-    emptyPl:'Плейлист пустой.',plError:'Ошибка загрузки.',
-    authError:'Ошибка авторизации.',
-    welcome:n=>`Привет, ${n}! 🌻 Теперь у меня есть доступ к вашим плейлистам. Скажите "включи [название песни]"!`,
-    signedOut:'Вы вышли из аккаунта.',
-    connError:'Ошибка соединения. Проверьте интернет.',
-    micDenied:'Разрешите доступ к микрофону.',noSpeech:'Ничего не услышала. Попробуйте ещё раз.',
-    videoCount:n=>`${n} видео`,
-    defaultMusic:'популярная музыка',
-    aiSystem:(u,m)=>`Ты — Оксана, дружелюбный голосовой помощник. Отвечай ТОЛЬКО на русском языке. Ответы короткие и естественные (1-3 предложения). Без форматирования (*,#,-). ${u} ${m} Если спрашивают о музыке — подскажи "включи [название]".`,
+    musicCmds: [
+      { icon: '🎸', text: 'Рок музыка', cmd: 'найди рок музыку в spotify' },
+      { icon: '🎹', text: 'Классика', cmd: 'найди классическую музыку в spotify' },
+      { icon: '💃', text: 'Для танцев', cmd: 'найди музыку для танцев в spotify' },
+      { icon: '😌', text: 'Релакс', cmd: 'найди спокойную музыку в spotify' },
+    ],
+    system: `Ты — Оксана, дружелюбный голосовой помощник. Отвечай ТОЛЬКО на русском языке.
+Ответы естественные и разговорные (1-4 предложения).
+Когда тебя просят найти музыку в Spotify или включить трек/исполнителя — отвечай в формате JSON:
+{"action":"spotify_search","query":"название поиска","type":"track или artist или playlist"}
+Для обычных вопросов — отвечай текстом без JSON.`,
+    noSpotify: '⚠️ Spotify не подключён. Введите Client ID в настройках для поиска музыки.',
+    found: 'Нашла для вас',
+    notFound: 'Ничего не нашла в Spotify по этому запросу. Попробуйте иначе.',
   }
 };
 
-let lang='uk', t=i18n.uk;
-let isListening=false,voiceEnabled=true,speechRate=1.0;
-let musicSource='sp'; // 'yt', 'vk', 'sp'
-let recognition=null,ytPlayer=null,ytReady=true;
-let currentQueue=[],currentIdx=0,isPlaying=false;
-let accessToken=null,userInfo=null,playlists=[];
+// ── SETUP ─────────────────────────────────────────────────────────
+window.onload = () => {
+  document.getElementById('setup-redirect').value = window.location.origin + window.location.pathname;
 
-// LANGUAGE
-function setLang(l){
-  lang=l; t=i18n[l];
-  document.getElementById('langUk').classList.toggle('active',l==='uk');
-  document.getElementById('langRu').classList.toggle('active',l==='ru');
-  document.getElementById('gBtnText').textContent=accessToken?(userInfo?.given_name||''):t.signIn;
-  document.getElementById('plLabel').textContent=t.yourPlaylists;
-  document.getElementById('cmdsLabel').textContent=t.quickCmds;
-  document.getElementById('settingsLabel').textContent=t.settingsTitle;
-  document.getElementById('voiceReplyLabel').textContent=t.voiceReply;
-  document.getElementById('speedLabel').textContent=t.speed;
-  document.getElementById('hintText').textContent=t.hint;
-  const ph=document.getElementById('placeholderBubble');
-  if(ph)ph.innerHTML=t.placeholder;
-  setMicState('idle');
-  renderCmds();
-// Set VK as default music source on load
-window.addEventListener('DOMContentLoaded', function(){
-  // Check if returning from Spotify OAuth
-  if(window.location.hash.includes('access_token')){
-    const params=new URLSearchParams(window.location.hash.slice(1));
-    spToken=params.get('access_token');
-    history.replaceState(null,'',window.location.pathname);
-    setMusicSource('sp');
-    loadSpotifySDK().then(()=>{
-      addAIBubble('✅ Spotify подключён! Скажите "включи [название трека]"');
-    });
+  // Load saved keys
+  const saved = JSON.parse(localStorage.getItem('oksana_config') || '{}');
+  if (saved.groq) document.getElementById('setup-groq').value = saved.groq;
+  if (saved.spotifyId) document.getElementById('setup-spotify-id').value = saved.spotifyId;
+  if (saved.lang) { lang = saved.lang; document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active')); document.querySelector(`.lang-btn[onclick*="${lang}"]`)?.classList.add('active'); }
+
+  // Check Spotify callback
+  const hash = window.location.hash;
+  if (hash.includes('access_token')) {
+    const params = new URLSearchParams(hash.replace('#', '?'));
+    spotifyToken = params.get('access_token');
+    const cfg = JSON.parse(localStorage.getItem('oksana_config') || '{}');
+    groqKey = cfg.groq || '';
+    spotifyClientId = cfg.spotifyId || '';
+    lang = cfg.lang || 'uk';
+    window.location.hash = '';
+    launchApp();
+  }
+};
+
+function selectLang(l, btn) {
+  lang = l;
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+function startApp() {
+  groqKey = document.getElementById('setup-groq').value.trim();
+  spotifyClientId = document.getElementById('setup-spotify-id').value.trim();
+
+  if (!groqKey) { alert('Введіть Groq API Key!'); return; }
+
+  localStorage.setItem('oksana_config', JSON.stringify({ groq: groqKey, spotifyId: spotifyClientId, lang }));
+
+  if (spotifyClientId) {
+    // Auth with Spotify
+    const redirectUri = encodeURIComponent(window.location.origin + window.location.pathname);
+    const scopes = encodeURIComponent('streaming user-read-playback-state user-modify-playback-state user-read-currently-playing');
+    window.location.href = `https://accounts.spotify.com/authorize?client_id=${spotifyClientId}&response_type=token&redirect_uri=${redirectUri}&scope=${scopes}`;
   } else {
-    setMusicSource('sp');
-    // Show Spotify login button
-    setTimeout(showSpotifyLogin, 500);
+    launchApp();
   }
-  checkVKToken();
-});
+}
 
-function showSpotifyLogin(){
-  if(spToken) return;
-  const area = document.getElementById('chatArea');
-  const ph = area.querySelector('.placeholder');
-  if(ph) ph.remove();
+function launchApp() {
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('app').classList.add('visible');
+  renderSidebar();
+  addMsg('assistant', T[lang].greeting);
+  updateLangUI();
+
+  if (spotifyToken) initSpotify();
+  initVoiceRecognition();
+}
+
+// ── LANGUAGE ──────────────────────────────────────────────────────
+function switchLang(l) {
+  lang = l;
+  updateLangUI();
+  const cfg = JSON.parse(localStorage.getItem('oksana_config') || '{}');
+  cfg.lang = l;
+  localStorage.setItem('oksana_config', JSON.stringify(cfg));
+}
+
+function updateLangUI() {
+  document.getElementById('lang-uk').classList.toggle('active', lang === 'uk');
+  document.getElementById('lang-ru').classList.toggle('active', lang === 'ru');
+  document.getElementById('msg-input').placeholder = T[lang].placeholder;
+  document.getElementById('sidebar-title').textContent = T[lang].sidebarTitle;
+  document.getElementById('sidebar-spotify-title').textContent = T[lang].sidebarSpotify;
+  renderSidebar();
+}
+
+function renderSidebar() {
+  const qc = document.getElementById('quick-cmds');
+  qc.innerHTML = T[lang].cmds.map(c => `
+    <button class="cmd-btn" onclick="sendText('${c.cmd}')">
+      <span class="icon">${c.icon}</span>${c.text}
+    </button>`).join('');
+
+  const mc = document.getElementById('music-cmds');
+  mc.innerHTML = T[lang].musicCmds.map(c => `
+    <button class="cmd-btn" onclick="sendText('${c.cmd}')">
+      <span class="icon">${c.icon}</span>${c.text}
+    </button>`).join('');
+}
+
+// ── CHAT ──────────────────────────────────────────────────────────
+function addMsg(role, text, extra = '') {
+  const chat = document.getElementById('chat');
   const div = document.createElement('div');
-  div.className = 'bubble ai';
-  div.id = 'spLoginMsg';
-  div.innerHTML = `<span class="ai-avatar">🌻</span><div>
-    Для музыки нужно войти в Spotify!<br><br>
-    <button onclick="loginSpotify()" style="background:linear-gradient(135deg,#1db954,#1ed760);border:none;color:white;font-family:Geologica,sans-serif;font-size:14px;font-weight:600;padding:12px 24px;border-radius:25px;cursor:pointer;width:100%;">
-      🎵 Войти в Spotify
-    </button>
-  </div>`;
-  area.appendChild(div);
-}
-  if(playlists.length)renderPlaylists();
-}
-
-function renderCmds(){
-  document.getElementById('cmdsGrid').innerHTML=t.cmds.map(c=>
-    `<button class="cmd" onclick="quickAsk('${c.text}')"><span class="ico">${c.ico}</span>${c.label}</button>`
-  ).join('');
+  div.className = `msg ${role}`;
+  div.innerHTML = `
+    <div class="msg-avatar">${role === 'assistant' ? '🌻' : '👤'}</div>
+    <div>
+      <div class="msg-bubble">${text}</div>
+      ${extra}
+    </div>`;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
 }
 
-// YOUTUBE
-// Use visible iframe for Safari iOS compatibility
-function initPlayer(){ ytReady=true; }
-initPlayer();
-
-// ── VK MUSIC ─────────────────────────────────────────────────────
-function setMusicSource(src){
-  musicSource=src;
-  document.getElementById('srcYT').classList.toggle('active',src==='yt');
-  document.getElementById('srcVK').classList.toggle('active',src==='vk');
-  document.getElementById('srcSP').classList.toggle('active',src==='sp');
-  if(src==='sp' && !spToken) initSpotify();
-}
-
-function vkJsonp(method, params){
-  return new Promise((resolve,reject)=>{
-    const cb='vkcb_'+Math.random().toString(36).slice(2);
-    const s=document.createElement('script');
-    const token=window._vkUserToken||VK_TOKEN;
-const p=new URLSearchParams({...params,access_token:token,v:'5.131',callback:cb});
-    s.src=`https://api.vk.com/method/${method}?${p}`;
-    s.onerror=()=>{delete window[cb];s.remove();reject(new Error('vk error'));};
-    window[cb]=data=>{delete window[cb];s.remove();resolve(data);};
-    document.head.appendChild(s);
-    setTimeout(()=>{delete window[cb];s.remove();reject(new Error('timeout'));},8000);
-  });
-}
-
-async function searchVK(query){
-  try{
-    const data=await vkJsonp('audio.search',{q:query,count:10,sort:0});
-    const items=data.response?.items||[];
-    if(data.error){
-      console.error('VK error:',data.error);
-      // audio.search needs user token - show helpful message
-      addAIBubble('⚠️ VK Музыка требует авторизацию пользователя. Нажмите "Войти VK" ниже.');
-      showVKLoginBtn();
-      return [];
-    }
-    return items;
-  }catch(e){console.error('VK search error',e);return [];}
-}
-
-function showVKLoginBtn(){
-  if(document.getElementById('vkLoginBtn'))return;
-  const btn=document.createElement('button');
-  btn.id='vkLoginBtn';
-  btn.className='cmd';
-  btn.style.cssText='width:100%;margin:10px 0;justify-content:center;background:linear-gradient(135deg,#4f8ef7,#7c3aed);border:none;color:white;font-size:14px;padding:14px;';
-  btn.innerHTML='🔑 Войти через VK для музыки';
-  btn.onclick=loginVK;
-  document.getElementById('chatArea').after(btn);
-}
-
-function loginVK(){
-  const authUrl='https://oauth.vk.com/authorize?client_id='+VK_APP_ID+'&display=page&redirect_uri=https://zhigalkin.github.io/oksana-app/&scope=audio&response_type=token&v=5.131';
-  window.location.href=authUrl;
-}
-
-// Check if we got user token from URL hash (after VK OAuth redirect)
-function checkVKToken(){
-  const hash=window.location.hash;
-  if(hash.includes('access_token')){
-    const params=new URLSearchParams(hash.slice(1));
-    const token=params.get('access_token');
-    if(token){
-      // Store and use user token instead of service token
-      window._vkUserToken=token;
-      history.replaceState(null,'',window.location.pathname);
-      addAIBubble('✅ VK авторизован! Теперь скажите "включи [название трека]"');
-    }
-  }
-}
-
-async function playVKQuery(query){
-  addAIBubble(t.searching(query));
-  const items=await searchVK(query);
-  if(!items.length){addAIBubble(t.notFound);return;}
-  
-  // Build queue
-  currentQueue=items.map(a=>({vk:true,id:a.id,url:a.url,title:a.title,artist:a.artist,thumb:a.album?.thumb?.photo_300||''}));
-  currentIdx=0;
-  playVKTrack(currentQueue[0]);
-  showVKResults(items);
-}
-
-function showVKResults(items){
-  const list=document.getElementById('resultsList');
-  list.classList.add('show');
-  list.innerHTML=items.map((a,i)=>`
-    <div class="result-item" onclick="playVKTrack(currentQueue[${i}])">
-      <img class="result-thumb" src="${a.album?.thumb?.photo_68||''}" onerror="this.src=''" alt="" style="background:var(--card2)">
-      <div class="result-info">
-        <div class="result-title">${escHtml(a.title)}</div>
-        <div class="result-ch">${escHtml(a.artist)}</div>
-      </div>
-      <span class="result-play">▶</span>
-    </div>`).join('');
-  setTimeout(()=>list.classList.remove('show'),10000);
-}
-
-let vkAudio=null;
-function playVKTrack(track){
-  if(!track||!track.url){addAIBubble('Трек недоступен.');return;}
-  
-  // Stop previous
-  if(vkAudio){vkAudio.pause();vkAudio=null;}
-  
-  // Hide YT iframe
-  document.getElementById('ytIframe').src='';
-  
-  // Play via HTML5 Audio — works perfectly on iOS!
-  vkAudio=new Audio(track.url);
-  vkAudio.play().then(()=>{
-    isPlaying=true;
-    document.getElementById('playPauseBtn').textContent='⏸️';
-  }).catch(e=>{
-    addAIBubble('Трек недоступен, пробую следующий...');
-    nextTrack();
-  });
-  vkAudio.onended=()=>nextTrack();
-  vkAudio.volume=parseInt(document.getElementById('volRange').value)/100;
-  
-  // Update player UI
-  document.getElementById('playerCard').classList.add('show');
-  document.getElementById('playerTitle').textContent=track.title;
-  document.getElementById('playerChannel').textContent=track.artist;
-  document.getElementById('playerThumb').src=track.thumb;
-  document.getElementById('resultsList').classList.remove('show');
-}
-
-// ── SPOTIFY ──────────────────────────────────────────────────────
-let spToken=null;
-let spPlayer=null;
-let spDeviceId=null;
-let spReady=false;
-
-async function initSpotify(){
-  // Check for token in URL (after OAuth redirect)
-  const hash=window.location.hash;
-  if(hash.includes('access_token')){
-    const params=new URLSearchParams(hash.slice(1));
-    spToken=params.get('access_token');
-    history.replaceState(null,'',window.location.pathname);
-    await loadSpotifySDK();
-    addAIBubble('✅ Spotify подключён! Скажите "включи [название трека]"');
-    return;
-  }
-  // Need to login
-  loginSpotify();
-}
-
-function loginSpotify(){
-  const scopes='streaming user-read-email user-read-private user-modify-playback-state';
-  const url=`https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(SPOTIFY_REDIRECT)}&scope=${encodeURIComponent(scopes)}`;
-  window.location.href=url;
-}
-
-async function loadSpotifySDK(){
-  if(window.Spotify){initSpotifyPlayer();return;}
-  return new Promise(resolve=>{
-    const s=document.createElement('script');
-    s.src='https://sdk.scdn.co/spotify-player.js';
-    s.onload=resolve;
-    document.head.appendChild(s);
-    window.onSpotifyWebPlaybackSDKReady=()=>{initSpotifyPlayer();resolve();};
-  });
-}
-
-function initSpotifyPlayer(){
-  spPlayer=new Spotify.Player({
-    name:'Оксана',
-    getOAuthToken:cb=>cb(spToken),
-    volume:0.8
-  });
-  spPlayer.addListener('ready',({device_id})=>{
-    spDeviceId=device_id; spReady=true;
-    console.log('Spotify ready, device:',device_id);
-  });
-  spPlayer.addListener('player_state_changed',state=>{
-    if(!state)return;
-    if(state.paused && state.position===0 && state.track_window.previous_tracks.length>0){
-      nextTrack();
-    }
-    isPlaying=!state.paused;
-    document.getElementById('playPauseBtn').textContent=isPlaying?'⏸️':'▶️';
-  });
-  spPlayer.connect();
-}
-
-async function searchSpotify(query){
-  if(!spToken)return[];
-  try{
-    const r=await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=10&market=UA`,{
-      headers:{Authorization:`Bearer ${spToken}`}
-    });
-    const d=await r.json();
-    return d.tracks?.items||[];
-  }catch(e){console.error('Spotify search error',e);return[];}
-}
-
-async function playSpotifyQuery(query){
-  if(!spToken){showSpotifyLogin();return;}
-  addAIBubble(t.searching(query));
-  const items=await searchSpotify(query);
-  if(!items.length){addAIBubble(t.notFound);return;}
-  
-  currentQueue=items.map(t=>({
-    sp:true,
-    uri:t.uri,
-    id:t.id,
-    title:t.name,
-    artist:t.artists.map(a=>a.name).join(', '),
-    thumb:t.album.images[1]?.url||t.album.images[0]?.url||''
-  }));
-  currentIdx=0;
-  showSpotifyResults(items);
-  playSpotifyTrack(currentQueue[0]);
-}
-
-function showSpotifyResults(items){
-  const list=document.getElementById('resultsList');
-  list.classList.add('show');
-  list.innerHTML=items.map((t,i)=>`
-    <div class="result-item" onclick="playSpotifyTrack(currentQueue[${i}])">
-      <img class="result-thumb" src="${t.album.images[2]?.url||t.album.images[0]?.url||''}" alt="">
-      <div class="result-info">
-        <div class="result-title">${escHtml(t.name)}</div>
-        <div class="result-ch">${escHtml(t.artists.map(a=>a.name).join(', '))}</div>
-      </div>
-      <span class="result-play">▶</span>
-    </div>`).join('');
-  setTimeout(()=>list.classList.remove('show'),10000);
-}
-
-async function playSpotifyTrack(track){
-  if(!track||!track.uri){addAIBubble('Трек недоступен.');return;}
-  if(!spReady||!spDeviceId){
-    addAIBubble('⏳ Spotify загружается... попробуйте через секунду.');
-    return;
-  }
-  try{
-    await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${spDeviceId}`,{
-      method:'PUT',
-      headers:{Authorization:`Bearer ${spToken}`,'Content-Type':'application/json'},
-      body:JSON.stringify({uris:[track.uri]})
-    });
-    document.getElementById('playerCard').classList.add('show');
-    document.getElementById('playerTitle').textContent=track.title;
-    document.getElementById('playerChannel').textContent=track.artist;
-    document.getElementById('playerThumb').src=track.thumb;
-    document.getElementById('ytIframe').src='';
-    isPlaying=true;
-    document.getElementById('playPauseBtn').textContent='⏸️';
-    if(vkAudio){vkAudio.pause();vkAudio=null;}
-  }catch(e){console.error('Spotify play error',e);}
-}
-
-async function toggleSpotifyPlayPause(){
-  if(!spPlayer)return;
-  await spPlayer.togglePlay();
-}
-
-function ytJsonp(url){
-  return new Promise((resolve,reject)=>{
-    const cb='ytcb_'+Math.random().toString(36).slice(2);
-    const s=document.createElement('script');
-    s.src=url+(url.includes('?')?'&':'?')+'callback='+cb;
-    s.onerror=()=>{delete window[cb];s.remove();reject(new Error('err'));};
-    window[cb]=data=>{delete window[cb];s.remove();resolve(data);};
-    document.head.appendChild(s);
-    setTimeout(()=>{delete window[cb];s.remove();reject(new Error('timeout'));},8000);
-  });
-}
-
-async function searchYouTube(query){
-  if(accessToken){
-    try{
-      const r=await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=5`,{headers:{Authorization:`Bearer ${accessToken}`}});
-      if(r.ok){const d=await r.json();if(d.items?.length)return d.items;}
-    }catch(e){}
-  }
-  try{
-    const d=await ytJsonp(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=5&key=${YT_API_KEY}`);
-    return d.items||[];
-  }catch(e){return [];}
-}
-
-async function playYouTubeQuery(query){
-  if(musicSource==='vk'){await playVKQuery(query);return;}
-  if(musicSource==='sp'){await playSpotifyQuery(query);return;}
-  addAIBubble(t.searching(query));
-  const items=await searchYouTube(query);
-  if(!items.length){addAIBubble(t.notFound);return;}
-  showSearchResults(items);
-  currentQueue=items;currentIdx=0;playVideo(items[0]);
-}
-
-function showSearchResults(items){
-  const list=document.getElementById('resultsList');
-  list.classList.add('show');
-  list.innerHTML=items.map((item,i)=>{
-    const id=item.id?.videoId||item.id;
-    const title=escHtml(item.snippet?.title||'');
-    const ch=escHtml(item.snippet?.channelTitle||'');
-    const thumb=item.snippet?.thumbnails?.default?.url||'';
-    return `<div class="result-item" onclick="playVideoById('${id}','${title}','${ch}','${thumb}',${i})">
-      <img class="result-thumb" src="${thumb}" alt="">
-      <div class="result-info"><div class="result-title">${title}</div><div class="result-ch">${ch}</div></div>
-      <span class="result-play">▶</span></div>`;
-  }).join('');
-  setTimeout(()=>list.classList.remove('show'),8000);
-}
-
-function playVideo(item){
-  const id=item.id?.videoId||item.id;
-  const sn=item.snippet||{};
-  playVideoById(id,sn.title||'',sn.channelTitle||'',sn.thumbnails?.medium?.url||sn.thumbnails?.default?.url||'',currentIdx);
-}
-
-let currentVideoId = null;
-
-function playVideoById(id,title,ch,thumb,idx){
-  currentIdx=idx;
-  currentVideoId=id;
-  const iframe=document.getElementById('ytIframe');
-  // enablejsapi=1 allows postMessage control; autoplay=1 + playsinline=1 critical for iOS
-  iframe.src=`https://www.youtube.com/embed/${id}?autoplay=1&playsinline=1&rel=0&enablejsapi=1&modestbranding=1&origin=${encodeURIComponent(location.origin)}`;
-  document.getElementById('playerCard').classList.add('show');
-  document.getElementById('playerTitle').textContent=decodeHtml(title);
-  document.getElementById('playerChannel').textContent=decodeHtml(ch);
-  document.getElementById('playerThumb').src=thumb;
-  document.getElementById('resultsList').classList.remove('show');
-  isPlaying=true;
-  document.getElementById('playPauseBtn').textContent='⏸️';
-  // Listen for video end via postMessage
-  window.onmessage=function(e){
-    try{
-      const d=JSON.parse(e.data);
-      if(d.event==='onStateChange' && d.info===0) nextTrack(); // 0 = ended
-    }catch(ex){}
-  };
-}
-
-function togglePlayPause(){
-  if(musicSource==='sp'&&spPlayer){toggleSpotifyPlayPause();return;}
-  if(vkAudio){
-    if(isPlaying){vkAudio.pause();isPlaying=false;document.getElementById('playPauseBtn').textContent='▶️';}
-    else{vkAudio.play();isPlaying=true;document.getElementById('playPauseBtn').textContent='⏸️';}
-    return;
-  }
-  const iframe=document.getElementById('ytIframe');
-  if(isPlaying){
-    iframe.src=`https://www.youtube.com/embed/${currentVideoId}?autoplay=0&playsinline=1&rel=0&origin=${encodeURIComponent(location.origin)}`;
-    isPlaying=false;document.getElementById('playPauseBtn').textContent='▶️';
-  }else{
-    iframe.src=`https://www.youtube.com/embed/${currentVideoId}?autoplay=1&playsinline=1&rel=0&origin=${encodeURIComponent(location.origin)}`;
-    isPlaying=true;document.getElementById('playPauseBtn').textContent='⏸️';
-  }
-}
-function nextTrack(){
-  if(!currentQueue.length)return;
-  currentIdx=(currentIdx+1)%currentQueue.length;
-  const track=currentQueue[currentIdx];
-  if(track.sp)playSpotifyTrack(track);
-  else if(track.vk)playVKTrack(track);
-  else playVideo(track);
-}
-function prevTrack(){
-  if(!currentQueue.length)return;
-  currentIdx=(currentIdx-1+currentQueue.length)%currentQueue.length;
-  const track=currentQueue[currentIdx];
-  if(track.sp)playSpotifyTrack(track);
-  else if(track.vk)playVKTrack(track);
-  else playVideo(track);
-}
-function setVolume(v){
-  const vol=parseInt(v)/100;
-  if(vkAudio)vkAudio.volume=vol;
-  if(spPlayer)spPlayer.setVolume(vol);
-}
-
-// GOOGLE AUTH
-function handleGoogleAuth(){
-  if(accessToken){signOut();return;}
-  const client=google.accounts.oauth2.initTokenClient({
-    client_id:GOOGLE_CLIENT_ID,
-    scope:'https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/userinfo.profile',
-    callback:async resp=>{
-      if(resp.error){addAIBubble(t.authError);return;}
-      accessToken=resp.access_token;
-      await fetchUserInfo();await fetchPlaylists();
-    }
-  });
-  client.requestAccessToken();
-}
-
-async function fetchUserInfo(){
-  try{
-    const r=await fetch('https://www.googleapis.com/oauth2/v3/userinfo',{headers:{Authorization:`Bearer ${accessToken}`}});
-    userInfo=await r.json();
-    document.getElementById('gBtn').innerHTML=`<img class="avatar" src="${userInfo.picture}" alt=""> ${userInfo.given_name}`;
-    addAIBubble(t.welcome(userInfo.given_name));
-  }catch(e){}
-}
-
-async function fetchPlaylists(){
-  if(!accessToken)return;
-  try{
-    const r=await fetch('https://www.googleapis.com/youtube/v3/playlists?part=snippet,contentDetails&mine=true&maxResults=20',{headers:{Authorization:`Bearer ${accessToken}`}});
-    const d=await r.json(); playlists=d.items||[]; renderPlaylists();
-  }catch(e){}
-}
-
-function renderPlaylists(){
-  if(!playlists.length)return;
-  document.getElementById('playlistSection').classList.add('show');
-  document.getElementById('plLabel').textContent=t.yourPlaylists;
-  document.getElementById('plList').innerHTML=playlists.map(pl=>`
-    <div class="pl-item" onclick="playPlaylist('${pl.id}','${escHtml(pl.snippet.title)}')">
-      <span class="pl-icon">📋</span>
-      <span class="pl-name">${escHtml(pl.snippet.title)}</span>
-      <span class="pl-count">${t.videoCount(pl.contentDetails?.itemCount||0)}</span>
-    </div>`).join('');
-}
-
-async function playPlaylist(plId,name){
-  if(!accessToken){addAIBubble(t.loginFirst);speak(t.loginSpeak);return;}
-  try{
-    const r=await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${plId}&maxResults=20`,{headers:{Authorization:`Bearer ${accessToken}`}});
-    const d=await r.json();
-    const items=(d.items||[]).map(i=>({id:{videoId:i.snippet.resourceId.videoId},snippet:{title:i.snippet.title,channelTitle:i.snippet.videoOwnerChannelTitle||'',thumbnails:i.snippet.thumbnails}}));
-    if(!items.length){addAIBubble(t.emptyPl);return;}
-    currentQueue=items;currentIdx=0;playVideo(items[0]);
-    addAIBubble(t.playingPl(name,items.length));speak(t.playingPlSpeak(name));
-  }catch(e){addAIBubble(t.plError);}
-}
-
-function signOut(){
-  accessToken=null;userInfo=null;playlists=[];
-  document.getElementById('gBtn').innerHTML=`<svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg><span>${t.signIn}</span>`;
-  document.getElementById('playlistSection').classList.remove('show');
-  addAIBubble(t.signedOut);
-}
-
-// MIC
-function toggleListening(){isListening?stopListening():startListening();}
-
-function startListening(){
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){alert('Використовуйте Chrome або Edge.');return;}
-  recognition=new SR();
-  recognition.lang=t.speechLang;
-  recognition.interimResults=true;
-  recognition.maxAlternatives=1;
-  recognition.onresult=e=>{
-    const txt=Array.from(e.results).map(r=>r[0].transcript).join('');
-    if(e.results[e.results.length-1].isFinal){stopListening();addUserBubble(txt);processCommand(txt);}
-  };
-  recognition.onerror=e=>{
-    stopListening();
-    if(e.error==='not-allowed')addAIBubble(t.micDenied);
-    if(e.error==='no-speech')addAIBubble(t.noSpeech);
-  };
-  recognition.onend=()=>{if(isListening)stopListening();};
-  try{recognition.start();isListening=true;setMicState('listening');}catch(e){}
-}
-
-function stopListening(){
-  if(recognition)try{recognition.stop();}catch(e){}
-  isListening=false;setMicState('idle');
-}
-
-function setMicState(state){
-  const btn=document.getElementById('micBtn');
-  const st=document.getElementById('status');
-  const wave=document.getElementById('wave');
-  btn.className='mic-btn'+(state!=='idle'?` ${state}`:'');
-  wave.className='wave'+(state!=='idle'?' show':'');
-  const icons={idle:'🎤',listening:'🔴',thinking:'⏳',speaking:'🔊'};
-  const labels={idle:t.pressToTalk,listening:t.listening,thinking:t.thinking,speaking:t.speaking};
-  btn.textContent=icons[state]||'🎤';
-  st.textContent=labels[state]||'';
-  st.className='status'+(state!=='idle'?` ${state}`:'');
-}
-
-// COMMANDS
-async function processCommand(text){
-  const low=text.toLowerCase().trim();
-  if(t.pauseTriggers.some(x=>low.includes(x))){
-    if(ytPlayer&&isPlaying)ytPlayer.pauseVideo();
-    addAIBubble(t.paused);speak(t.pausedSpeak);return;
-  }
-  if(t.nextTriggers.some(x=>low.includes(x))){nextTrack();addAIBubble(t.next);speak(t.nextSpeak);return;}
-  if(t.prevTriggers.some(x=>low.includes(x))){prevTrack();addAIBubble(t.prev);speak(t.prevSpeak);return;}
-  if(t.plTriggers.some(x=>low.includes(x))){
-    if(!accessToken){addAIBubble(t.loginFirst);speak(t.loginSpeak);return;}
-    await fetchPlaylists();addAIBubble(t.plShown);speak(t.plSpeak);return;
-  }
-  const musicTrigger=t.musicTriggers.find(x=>low.includes(x));
-  if(musicTrigger){
-    let query=low;
-    t.musicTriggers.forEach(x=>{query=query.replace(x,'').trim();});
-    if(!query)query=t.defaultMusic;
-    setMicState('thinking');
-    await playYouTubeQuery(query);
-    setMicState('idle');return;
-  }
-  setMicState('thinking');
-  await askAI(text);
-}
-
-async function quickAsk(text){addUserBubble(text);await processCommand(text);}
-
-// AI
-async function askAI(text){
-  setMicState('thinking');showThinkingBubble();
-  const musicCtx=currentQueue.length?`Now playing: "${currentQueue[currentIdx]?.snippet?.title||''}"` :'';
-  const userCtx=userInfo?`User: ${userInfo.given_name}`:'';
-  try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'anthropic-dangerous-direct-browser-access':'true'
-      },
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,
-        system:t.aiSystem(userCtx,musicCtx),
-        messages:[{role:'user',content:text}]})
-    });
-    if(!resp.ok){throw new Error('API error '+resp.status);}
-    const data=await resp.json();
-    const answer=data.content?.[0]?.text||t.connError;
-    removeThinkingBubble();addAIBubble(answer);
-    if(voiceEnabled){setMicState('speaking');speak(answer);}
-    else setMicState('idle');
-  }catch(e){removeThinkingBubble();addAIBubble(t.connError);setMicState('idle');}
-}
-
-// TTS
-function speak(text){
-  if(!voiceEnabled||!('speechSynthesis' in window))return;
-  speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(text);
-  const voices=speechSynthesis.getVoices();
-  const v=voices.find(v=>v.lang.startsWith(t.voiceLang));
-  if(v)u.voice=v;
-  u.lang=t.speechLang;u.rate=speechRate;u.pitch=1.1;
-  u.onend=()=>setMicState('idle');u.onerror=()=>setMicState('idle');
-  speechSynthesis.speak(u);
-}
-speechSynthesis.onvoiceschanged=()=>{};
-
-// CHAT
-function addUserBubble(text){
-  const area=document.getElementById('chatArea');
-  const ph=area.querySelector('.placeholder');if(ph)ph.remove();
-  const div=document.createElement('div');div.className='bubble user';div.textContent=text;
-  area.appendChild(div);div.scrollIntoView({behavior:'smooth',block:'nearest'});
-  while(area.children.length>10)area.removeChild(area.firstChild);
-}
-
-let thinkingBubble=null;
-function showThinkingBubble(){
-  const area=document.getElementById('chatArea');
-  thinkingBubble=document.createElement('div');thinkingBubble.className='bubble ai';
-  thinkingBubble.innerHTML=`<span class="ai-avatar">🌻</span><div><span class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span></div>`;
-  area.appendChild(thinkingBubble);thinkingBubble.scrollIntoView({behavior:'smooth',block:'nearest'});
-}
-function removeThinkingBubble(){if(thinkingBubble){thinkingBubble.remove();thinkingBubble=null;}}
-function addAIBubble(text){
-  removeThinkingBubble();
-  const area=document.getElementById('chatArea');
-  const div=document.createElement('div');div.className='bubble ai';
-  div.innerHTML=`<span class="ai-avatar">🌻</span><div>${escHtml(text)}</div>`;
-  area.appendChild(div);div.scrollIntoView({behavior:'smooth',block:'nearest'});
-  while(area.children.length>12)area.removeChild(area.firstChild);
-}
-
-function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function decodeHtml(s){const d=document.createElement('textarea');d.innerHTML=s;return d.value;}
-function toggleVoice(){voiceEnabled=!voiceEnabled;document.getElementById('voiceToggle').classList.toggle('on',voiceEnabled);if(!voiceEnabled)speechSynthesis.cancel();}
-document.addEventListener('keydown',e=>{
-  if(e.code==='Space'&&!['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName)){e.preventDefault();toggleListening();}
-});
-
-renderCmds();
-// Set VK as default music source on load
-window.addEventListener('DOMContentLoaded', function(){
-  // Check if returning from Spotify OAuth
-  if(window.location.hash.includes('access_token')){
-    const params=new URLSearchParams(window.location.hash.slice(1));
-    spToken=params.get('access_token');
-    history.replaceState(null,'',window.location.pathname);
-    setMusicSource('sp');
-    loadSpotifySDK().then(()=>{
-      addAIBubble('✅ Spotify подключён! Скажите "включи [название трека]"');
-    });
-  } else {
-    setMusicSource('sp');
-    // Show Spotify login button
-    setTimeout(showSpotifyLogin, 500);
-  }
-  checkVKToken();
-});
-
-function showSpotifyLogin(){
-  if(spToken) return;
-  const area = document.getElementById('chatArea');
-  const ph = area.querySelector('.placeholder');
-  if(ph) ph.remove();
+function addTyping() {
+  const chat = document.getElementById('chat');
   const div = document.createElement('div');
-  div.className = 'bubble ai';
-  div.id = 'spLoginMsg';
-  div.innerHTML = `<span class="ai-avatar">🌻</span><div>
-    Для музыки нужно войти в Spotify!<br><br>
-    <button onclick="loginSpotify()" style="background:linear-gradient(135deg,#1db954,#1ed760);border:none;color:white;font-family:Geologica,sans-serif;font-size:14px;font-weight:600;padding:12px 24px;border-radius:25px;cursor:pointer;width:100%;">
-      🎵 Войти в Spotify
-    </button>
-  </div>`;
-  area.appendChild(div);
+  div.className = 'msg assistant';
+  div.id = 'typing-indicator';
+  div.innerHTML = `
+    <div class="msg-avatar">🌻</div>
+    <div class="typing"><span></span><span></span><span></span></div>`;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
 }
+
+function removeTyping() {
+  document.getElementById('typing-indicator')?.remove();
+}
+
+// ── GROQ AI ───────────────────────────────────────────────────────
+async function askGroq(userMsg) {
+  history.push({ role: 'user', content: userMsg });
+  if (history.length > 20) history = history.slice(-20);
+
+  const messages = [
+    { role: 'system', content: T[lang].system },
+    ...history
+  ];
+
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages, max_tokens: 500, temperature: 0.7 })
+  });
+
+  const data = await res.json();
+  const answer = data.choices?.[0]?.message?.content || '...';
+  history.push({ role: 'assistant', content: answer });
+  return answer;
+}
+
+async function sendMsg() {
+  const input = document.getElementById('msg-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.style.height = 'auto';
+  await sendText(text);
+}
+
+async function sendText(text) {
+  addMsg('user', text);
+  addTyping();
+
+  try {
+    const answer = await askGroq(text);
+    removeTyping();
+
+    // Check if it's a Spotify action
+    try {
+      const json = JSON.parse(answer.match(/\{.*\}/s)?.[0] || '{}');
+      if (json.action === 'spotify_search') {
+        if (!spotifyToken) {
+          addMsg('assistant', T[lang].noSpotify);
+        } else {
+          addMsg('assistant', `🔍 ${T[lang].found}: "${json.query}"...`);
+          await spotifySearch(json.query, json.type || 'track');
+        }
+        return;
+      }
+    } catch(e) {}
+
+    addMsg('assistant', answer);
+  } catch(e) {
+    removeTyping();
+    addMsg('assistant', '❌ Помилка. Перевірте Groq API Key.');
+  }
+}
+
+// ── SPOTIFY ───────────────────────────────────────────────────────
+function initSpotify() {
+  window.onSpotifyWebPlaybackSDKReady = () => {
+    spotifyPlayer = new Spotify.Player({
+      name: 'Оксана Player',
+      getOAuthToken: cb => cb(spotifyToken),
+      volume: 0.8
+    });
+
+    spotifyPlayer.addListener('ready', ({ device_id }) => {
+      deviceId = device_id;
+      console.log('Spotify ready, device:', device_id);
+    });
+
+    spotifyPlayer.addListener('player_state_changed', state => {
+      if (!state) return;
+      isPlaying = !state.paused;
+      document.getElementById('play-pause').textContent = isPlaying ? '⏸' : '▶';
+      trackDuration = state.duration;
+      trackPosition = state.position;
+
+      const track = state.track_window?.current_track;
+      if (track) {
+        currentTrack = track;
+        document.getElementById('track-name').textContent = track.name;
+        document.getElementById('track-artist').textContent = track.artists.map(a => a.name).join(', ');
+        const img = track.album?.images?.[0]?.url;
+        if (img) document.getElementById('track-art').src = img;
+      }
+
+      updateProgress();
+    });
+
+    spotifyPlayer.connect();
+  };
+
+  const script = document.createElement('script');
+  script.src = 'https://sdk.scdn.co/spotify-player.js';
+  document.head.appendChild(script);
+}
+
+async function spotifySearch(query, type = 'track') {
+  try {
+    const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=${type}&limit=5`, {
+      headers: { 'Authorization': `Bearer ${spotifyToken}` }
+    });
+    const data = await res.json();
+
+    const items = data.tracks?.items || data.artists?.items || data.playlists?.items || [];
+
+    if (!items.length) {
+      addMsg('assistant', T[lang].notFound);
+      return;
+    }
+
+    const first = items[0];
+    const uri = first.uri;
+    const name = first.name;
+    const artist = first.artists?.[0]?.name || '';
+    const img = first.album?.images?.[0]?.url || first.images?.[0]?.url || '';
+
+    // Play it
+    if (deviceId) {
+      const body = type === 'artist' || type === 'playlist'
+        ? { context_uri: uri }
+        : { uris: items.filter(i => i.uri).map(i => i.uri) };
+
+      await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${spotifyToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+    }
+
+    // Show card
+    const card = `
+      <div class="spotify-card">
+        <img src="${img}" alt="" onerror="this.style.display='none'">
+        <div class="spotify-card-info">
+          <div class="spotify-card-title">${name}</div>
+          <div class="spotify-card-artist">${artist}</div>
+        </div>
+        <button class="spotify-play-btn" onclick="window.open('${first.external_urls?.spotify}','_blank')">🎵</button>
+      </div>`;
+
+    addMsg('assistant', `✅ ${lang === 'uk' ? 'Граю' : 'Играю'}: <b>${name}</b>`, card);
+
+  } catch(e) {
+    console.error(e);
+    addMsg('assistant', T[lang].notFound);
+  }
+}
+
+function togglePlay() {
+  if (!spotifyPlayer) return;
+  spotifyPlayer.togglePlay();
+}
+
+function prevTrack() {
+  if (!spotifyPlayer) return;
+  spotifyPlayer.previousTrack();
+}
+
+function nextTrack() {
+  if (!spotifyPlayer) return;
+  spotifyPlayer.nextTrack();
+}
+
+function setVolume(val) {
+  if (!spotifyPlayer) return;
+  spotifyPlayer.setVolume(val / 100);
+}
+
+function seekTo(e) {
+  if (!spotifyPlayer || !trackDuration) return;
+  const bar = document.getElementById('progress-bar');
+  const ratio = e.offsetX / bar.offsetWidth;
+  spotifyPlayer.seek(ratio * trackDuration);
+}
+
+function updateProgress() {
+  clearInterval(progressInterval);
+  if (!isPlaying) return;
+
+  progressInterval = setInterval(() => {
+    trackPosition += 1000;
+    if (trackPosition > trackDuration) { clearInterval(progressInterval); return; }
+    const pct = (trackPosition / trackDuration) * 100;
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('time-cur').textContent = formatTime(trackPosition);
+    document.getElementById('time-total').textContent = formatTime(trackDuration);
+  }, 1000);
+}
+
+function formatTime(ms) {
+  const s = Math.floor(ms / 1000);
+  return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+}
+
+// ── VOICE ─────────────────────────────────────────────────────────
+function initVoiceRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { document.getElementById('mic-btn').style.opacity = '0.3'; return; }
+
+  recognition = new SR();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = lang === 'uk' ? 'uk-UA' : 'ru-RU';
+
+  recognition.onresult = e => {
+    const text = e.results[0][0].transcript;
+    document.getElementById('msg-input').value = text;
+    stopMic();
+    sendMsg();
+  };
+
+  recognition.onend = () => stopMic();
+  recognition.onerror = () => stopMic();
+}
+
+function toggleMic() {
+  if (isListening) stopMic();
+  else startMic();
+}
+
+function startMic() {
+  if (!recognition) return;
+  recognition.lang = lang === 'uk' ? 'uk-UA' : 'ru-RU';
+  recognition.start();
+  isListening = true;
+  document.getElementById('mic-btn').classList.add('active');
+}
+
+function stopMic() {
+  if (recognition) recognition.stop();
+  isListening = false;
+  document.getElementById('mic-btn').classList.remove('active');
+}
+
+// Spacebar shortcut
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && e.target === document.body) {
+    e.preventDefault();
+    toggleMic();
+  }
+});
 </script>
 </body>
 </html>
