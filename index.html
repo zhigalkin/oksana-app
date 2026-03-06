@@ -323,13 +323,33 @@ window.addEventListener('DOMContentLoaded', function(){
     spToken=params.get('access_token');
     history.replaceState(null,'',window.location.pathname);
     setMusicSource('sp');
-    loadSpotifySDK().then(()=>addAIBubble('✅ Spotify подключён! Скажите "включи [название трека]"'));
+    loadSpotifySDK().then(()=>{
+      addAIBubble('✅ Spotify подключён! Скажите "включи [название трека]"');
+    });
   } else {
     setMusicSource('sp');
-    initSpotify();
+    // Show Spotify login button
+    setTimeout(showSpotifyLogin, 500);
   }
   checkVKToken();
 });
+
+function showSpotifyLogin(){
+  if(spToken) return;
+  const area = document.getElementById('chatArea');
+  const ph = area.querySelector('.placeholder');
+  if(ph) ph.remove();
+  const div = document.createElement('div');
+  div.className = 'bubble ai';
+  div.id = 'spLoginMsg';
+  div.innerHTML = `<span class="ai-avatar">🌻</span><div>
+    Для музыки нужно войти в Spotify!<br><br>
+    <button onclick="loginSpotify()" style="background:linear-gradient(135deg,#1db954,#1ed760);border:none;color:white;font-family:Geologica,sans-serif;font-size:14px;font-weight:600;padding:12px 24px;border-radius:25px;cursor:pointer;width:100%;">
+      🎵 Войти в Spotify
+    </button>
+  </div>`;
+  area.appendChild(div);
+}
   if(playlists.length)renderPlaylists();
 }
 
@@ -541,7 +561,7 @@ async function searchSpotify(query){
 }
 
 async function playSpotifyQuery(query){
-  if(!spToken){loginSpotify();return;}
+  if(!spToken){showSpotifyLogin();return;}
   addAIBubble(t.searching(query));
   const items=await searchSpotify(query);
   if(!items.length){addAIBubble(t.notFound);return;}
@@ -934,13 +954,33 @@ window.addEventListener('DOMContentLoaded', function(){
     spToken=params.get('access_token');
     history.replaceState(null,'',window.location.pathname);
     setMusicSource('sp');
-    loadSpotifySDK().then(()=>addAIBubble('✅ Spotify подключён! Скажите "включи [название трека]"'));
+    loadSpotifySDK().then(()=>{
+      addAIBubble('✅ Spotify подключён! Скажите "включи [название трека]"');
+    });
   } else {
     setMusicSource('sp');
-    initSpotify();
+    // Show Spotify login button
+    setTimeout(showSpotifyLogin, 500);
   }
   checkVKToken();
 });
+
+function showSpotifyLogin(){
+  if(spToken) return;
+  const area = document.getElementById('chatArea');
+  const ph = area.querySelector('.placeholder');
+  if(ph) ph.remove();
+  const div = document.createElement('div');
+  div.className = 'bubble ai';
+  div.id = 'spLoginMsg';
+  div.innerHTML = `<span class="ai-avatar">🌻</span><div>
+    Для музыки нужно войти в Spotify!<br><br>
+    <button onclick="loginSpotify()" style="background:linear-gradient(135deg,#1db954,#1ed760);border:none;color:white;font-family:Geologica,sans-serif;font-size:14px;font-weight:600;padding:12px 24px;border-radius:25px;cursor:pointer;width:100%;">
+      🎵 Войти в Spotify
+    </button>
+  </div>`;
+  area.appendChild(div);
+}
 </script>
 </body>
 </html>
