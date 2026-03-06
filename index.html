@@ -685,6 +685,105 @@
     line-height: 1.5;
   }
 
+  /* Wake word indicator */
+  #wake-indicator {
+    position: fixed;
+    bottom: 200px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(19,19,26,0.95);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 50px;
+    padding: 10px 20px;
+    font-size: 13px;
+    color: var(--text2);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 50;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s;
+    pointer-events: none;
+  }
+
+  #wake-indicator.listening {
+    border-color: rgba(29,185,84,0.4);
+    color: var(--accent);
+  }
+
+  #wake-indicator.active {
+    border-color: rgba(255,68,68,0.6);
+    color: #ff6b6b;
+    background: rgba(255,68,68,0.1);
+  }
+
+  .wake-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text2);
+    flex-shrink: 0;
+  }
+
+  #wake-indicator.listening .wake-dot {
+    background: var(--accent);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+
+  #wake-indicator.active .wake-dot {
+    background: #ff6b6b;
+    animation: pulse-dot 0.6s ease-in-out infinite;
+  }
+
+  .always-on-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: none;
+    background: var(--surface2);
+    color: var(--text2);
+    font-size: 12px;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.2s;
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .always-on-toggle.on {
+    background: rgba(29,185,84,0.15);
+    border: 1px solid rgba(29,185,84,0.3);
+    color: var(--accent);
+  }
+
+  .toggle-dot {
+    width: 28px; height: 16px;
+    border-radius: 8px;
+    background: var(--surface);
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+
+  .always-on-toggle.on .toggle-dot {
+    background: var(--accent);
+  }
+
+  .toggle-dot::after {
+    content: '';
+    position: absolute;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: white;
+    top: 2px; left: 2px;
+    transition: left 0.2s;
+  }
+
+  .always-on-toggle.on .toggle-dot::after {
+    left: 14px;
+  }
+
   @media (max-width: 768px) {
     #app.visible { grid-template-columns: 1fr; grid-template-rows: 60px 1fr 160px; grid-template-areas: "header" "main" "player"; }
     aside { display: none; }
@@ -750,7 +849,20 @@
       <h3 id="sidebar-spotify-title">Музика</h3>
       <div class="quick-cmd" id="music-cmds"></div>
     </div>
+    <div class="sidebar-section">
+      <h3 id="sidebar-settings-title">Налаштування</h3>
+      <button class="always-on-toggle" id="always-on-btn" onclick="toggleAlwaysOn()">
+        <div class="toggle-dot"></div>
+        <span id="always-on-label">Постійне прослуховування</span>
+      </button>
+    </div>
   </aside>
+
+  <!-- Wake word indicator -->
+  <div id="wake-indicator">
+    <div class="wake-dot"></div>
+    <span id="wake-text">Скажіть "Оксана"</span>
+  </div>
 
   <main>
     <div id="chat"></div>
@@ -803,6 +915,9 @@ let progressInterval = null;
 let trackPosition = 0;
 let trackDuration = 0;
 let recognition = null;
+let wakeRecognition = null;
+let alwaysOn = false;
+let awaitingCommand = false;
 let isListening = false;
 let history = [];
 
@@ -873,17 +988,37 @@ window.onload = () => {
   if (saved.spotifyId) document.getElementById('setup-spotify-id').value = saved.spotifyId;
   if (saved.lang) { lang = saved.lang; document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active')); document.querySelector(`.lang-btn[onclick*="${lang}"]`)?.classList.add('active'); }
 
-  // Check Spotify callback
-  const hash = window.location.hash;
-  if (hash.includes('access_token')) {
-    const params = new URLSearchParams(hash.replace('#', '?'));
-    spotifyToken = params.get('access_token');
+  // Check Spotify PKCE callback
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('code');
+  if (code) {
     const cfg = JSON.parse(localStorage.getItem('oksana_config') || '{}');
     groqKey = cfg.groq || '';
     spotifyClientId = cfg.spotifyId || '';
     lang = cfg.lang || 'uk';
-    window.location.hash = '';
+    // Exchange code for token
+    history.replaceState({}, '', window.location.pathname);
+    exchangeCodeForToken(code, spotifyClientId).then(token => {
+      if (token) {
+        spotifyToken = token;
+        localStorage.setItem('spotify_token', token);
+        localStorage.setItem('spotify_token_time', Date.now());
+      }
+      launchApp();
+    });
+    return;
+  }
+  // Check saved token (valid 1 hour)
+  const savedToken = localStorage.getItem('spotify_token');
+  const savedTime = parseInt(localStorage.getItem('spotify_token_time') || '0');
+  if (savedToken && (Date.now() - savedTime) < 3500000) {
+    const cfg = JSON.parse(localStorage.getItem('oksana_config') || '{}');
+    groqKey = cfg.groq || '';
+    spotifyClientId = cfg.spotifyId || '';
+    lang = cfg.lang || 'uk';
+    spotifyToken = savedToken;
     launchApp();
+    return;
   }
 };
 
@@ -902,13 +1037,56 @@ function startApp() {
   localStorage.setItem('oksana_config', JSON.stringify({ groq: groqKey, spotifyId: spotifyClientId, lang }));
 
   if (spotifyClientId) {
-    // Auth with Spotify
-    const redirectUri = encodeURIComponent(window.location.origin + window.location.pathname);
-    const scopes = encodeURIComponent('streaming user-read-playback-state user-modify-playback-state user-read-currently-playing');
-    window.location.href = `https://accounts.spotify.com/authorize?client_id=${spotifyClientId}&response_type=token&redirect_uri=${redirectUri}&scope=${scopes}`;
+    authWithSpotifyPKCE();
   } else {
     launchApp();
   }
+}
+
+async function generateCodeVerifier() {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return btoa(String.fromCharCode(...array)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+async function generateCodeChallenge(verifier) {
+  const data = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+async function exchangeCodeForToken(code, clientId) {
+  const verifier = localStorage.getItem('spotify_verifier');
+  if (!verifier) return null;
+  const redirectUri = window.location.origin + window.location.pathname;
+  try {
+    const res = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: clientId,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+        code_verifier: verifier
+      })
+    });
+    const data = await res.json();
+    localStorage.removeItem('spotify_verifier');
+    return data.access_token || null;
+  } catch(e) {
+    console.error('Token exchange error:', e);
+    return null;
+  }
+}
+
+async function authWithSpotifyPKCE() {
+  const verifier = await generateCodeVerifier();
+  const challenge = await generateCodeChallenge(verifier);
+  localStorage.setItem('spotify_verifier', verifier);
+  const redirectUri = encodeURIComponent(window.location.origin + window.location.pathname);
+  const scopes = encodeURIComponent('streaming user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-email user-read-private');
+  window.location.href = `https://accounts.spotify.com/authorize?client_id=${spotifyClientId}&response_type=code&redirect_uri=${redirectUri}&scope=${scopes}&code_challenge_method=S256&code_challenge=${challenge}`;
 }
 
 function launchApp() {
@@ -1186,41 +1364,211 @@ function formatTime(ms) {
 }
 
 // ── VOICE ─────────────────────────────────────────────────────────
+// ── VOICE RECOGNITION ────────────────────────────────────────────
 function initVoiceRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { document.getElementById('mic-btn').style.opacity = '0.3'; return; }
 
+  // Main recognition — for commands
   recognition = new SR();
   recognition.continuous = false;
-  recognition.interimResults = false;
+  recognition.interimResults = true;
   recognition.lang = lang === 'uk' ? 'uk-UA' : 'ru-RU';
 
   recognition.onresult = e => {
-    const text = e.results[0][0].transcript;
-    document.getElementById('msg-input').value = text;
-    stopMic();
-    sendMsg();
+    let final = '';
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    if (interim) document.getElementById('msg-input').value = interim;
+    if (final) {
+      document.getElementById('msg-input').value = final;
+      stopMic();
+      sendMsg();
+    }
   };
 
-  recognition.onend = () => stopMic();
-  recognition.onerror = () => stopMic();
+  recognition.onend = () => {
+    isListening = false;
+    document.getElementById('mic-btn').classList.remove('active');
+    // If always-on mode — restart wake word listener
+    if (alwaysOn && !awaitingCommand) startWakeListener();
+  };
+  recognition.onerror = e => {
+    console.log('Recognition error:', e.error);
+    isListening = false;
+    document.getElementById('mic-btn').classList.remove('active');
+    if (alwaysOn && !awaitingCommand) setTimeout(startWakeListener, 1000);
+  };
+
+  // Load always-on state
+  alwaysOn = localStorage.getItem('oksana_always_on') === 'true';
+  if (alwaysOn) {
+    document.getElementById('always-on-btn').classList.add('on');
+    setTimeout(startWakeListener, 500);
+  }
+  updateWakeUI();
+}
+
+// ── WAKE WORD ─────────────────────────────────────────────────────
+function startWakeListener() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR || !alwaysOn || isListening) return;
+
+  wakeRecognition = new SR();
+  wakeRecognition.continuous = true;
+  wakeRecognition.interimResults = true;
+  wakeRecognition.lang = lang === 'uk' ? 'uk-UA' : 'ru-RU';
+
+  const wakeWords = ['оксана', 'oksana', 'оксано', 'оксанка'];
+
+  wakeRecognition.onresult = e => {
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const text = e.results[i][0].transcript.toLowerCase().trim();
+      const hasWakeWord = wakeWords.some(w => text.includes(w));
+      if (hasWakeWord) {
+        wakeRecognition.stop();
+        triggerWakeWord();
+        return;
+      }
+    }
+  };
+
+  wakeRecognition.onend = () => {
+    // Restart if still in always-on mode
+    if (alwaysOn && !isListening && !awaitingCommand) {
+      setTimeout(startWakeListener, 300);
+    }
+  };
+
+  wakeRecognition.onerror = e => {
+    if (e.error === 'no-speech' || e.error === 'aborted') {
+      if (alwaysOn && !isListening) setTimeout(startWakeListener, 500);
+    }
+  };
+
+  try { wakeRecognition.start(); } catch(e) {}
+  updateWakeUI('listening');
+}
+
+function triggerWakeWord() {
+  awaitingCommand = true;
+  updateWakeUI('active');
+
+  // Visual + sound feedback
+  document.getElementById('mic-btn').classList.add('active');
+
+  // Show "слухаю" in chat
+  const indicator = document.getElementById('wake-indicator');
+  document.getElementById('wake-text').textContent = lang === 'uk' ? '🎤 Слухаю...' : '🎤 Слушаю...';
+
+  // Start listening for command
+  if (!recognition) return;
+  recognition.lang = lang === 'uk' ? 'uk-UA' : 'ru-RU';
+
+  const commandRecog = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+  commandRecog.continuous = false;
+  commandRecog.interimResults = true;
+  commandRecog.lang = lang === 'uk' ? 'uk-UA' : 'ru-RU';
+  commandRecog.maxAlternatives = 1;
+
+  commandRecog.onresult = e => {
+    let final = '', interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    if (interim) document.getElementById('msg-input').value = interim;
+    if (final) {
+      document.getElementById('msg-input').value = final;
+      commandRecog.stop();
+    }
+  };
+
+  commandRecog.onend = () => {
+    awaitingCommand = false;
+    isListening = false;
+    document.getElementById('mic-btn').classList.remove('active');
+    updateWakeUI('listening');
+    const text = document.getElementById('msg-input').value.trim();
+    if (text) sendMsg();
+    if (alwaysOn) setTimeout(startWakeListener, 800);
+  };
+
+  commandRecog.onerror = () => {
+    awaitingCommand = false;
+    isListening = false;
+    document.getElementById('mic-btn').classList.remove('active');
+    updateWakeUI('listening');
+    if (alwaysOn) setTimeout(startWakeListener, 800);
+  };
+
+  try {
+    isListening = true;
+    commandRecog.start();
+  } catch(e) {
+    awaitingCommand = false;
+    isListening = false;
+  }
+}
+
+function updateWakeUI(state = '') {
+  const indicator = document.getElementById('wake-indicator');
+  if (!indicator) return;
+  indicator.className = state ? `${state}` : '';
+
+  const texts = {
+    uk: { listening: 'Скажіть "Оксана"...', active: '🎤 Слухаю команду...' },
+    ru: { listening: 'Скажите "Оксана"...', active: '🎤 Слушаю команду...' }
+  };
+
+  if (alwaysOn) {
+    indicator.style.display = 'flex';
+    document.getElementById('wake-text').textContent = state === 'active'
+      ? texts[lang].active
+      : texts[lang].listening;
+  } else {
+    indicator.style.display = 'none';
+  }
+}
+
+function toggleAlwaysOn() {
+  alwaysOn = !alwaysOn;
+  localStorage.setItem('oksana_always_on', alwaysOn);
+  const btn = document.getElementById('always-on-btn');
+  btn.classList.toggle('on', alwaysOn);
+
+  if (alwaysOn) {
+    startWakeListener();
+  } else {
+    if (wakeRecognition) { try { wakeRecognition.stop(); } catch(e) {} }
+    updateWakeUI('');
+  }
 }
 
 function toggleMic() {
-  if (isListening) stopMic();
-  else startMic();
+  if (alwaysOn) {
+    // Manual activation while in always-on mode
+    if (wakeRecognition) { try { wakeRecognition.stop(); } catch(e) {} }
+    triggerWakeWord();
+  } else {
+    if (isListening) stopMic();
+    else startMic();
+  }
 }
 
 function startMic() {
   if (!recognition) return;
   recognition.lang = lang === 'uk' ? 'uk-UA' : 'ru-RU';
-  recognition.start();
+  try { recognition.start(); } catch(e) {}
   isListening = true;
   document.getElementById('mic-btn').classList.add('active');
 }
 
 function stopMic() {
-  if (recognition) recognition.stop();
+  if (recognition) { try { recognition.stop(); } catch(e) {} }
   isListening = false;
   document.getElementById('mic-btn').classList.remove('active');
 }
