@@ -1320,13 +1320,38 @@ function initSpotify() {
   document.head.appendChild(script);
 }
 
+async function refreshSpotifyToken() {
+  // Токен истёк — редиректим на повторную авторизацию
+  const cfg = JSON.parse(localStorage.getItem('oksana_config') || '{}');
+  spotifyClientId = cfg.spotifyId || '';
+  if (!spotifyClientId) return;
+  localStorage.removeItem('spotify_token');
+  localStorage.removeItem('spotify_token_time');
+  spotifyToken = '';
+  addMsg('assistant', lang === 'uk'
+    ? '🔄 Токен Spotify закінчився. Перенаправляю на авторизацію...'
+    : '🔄 Токен Spotify истёк. Перенаправляю на авторизацию...');
+  setTimeout(() => authWithSpotifyPKCE(), 1500);
+}
+
+async function spotifyFetch(url, options = {}) {
+  const res = await fetch(url, {
+    ...options,
+    headers: { 'Authorization': `Bearer ${spotifyToken}`, 'Content-Type': 'application/json', ...(options.headers || {}) }
+  });
+  if (res.status === 401 || res.status === 403) {
+    refreshSpotifyToken();
+    throw new Error('Token expired');
+  }
+  return res;
+}
+
 async function spotifySearch(query, type = 'track') {
   try {
     // Search
     const searchType = type === 'artist' ? 'artist' : type === 'playlist' ? 'playlist' : 'track';
-    const res = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=${searchType}&limit=5`, {
-      headers: { 'Authorization': `Bearer ${spotifyToken}` }
-    });
+    const res = await spotifyFetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=${searchType}&limit=5`);
+    if (!res.ok) throw new Error(`Search failed: ${res.status}`);
     const data = await res.json();
 
     const items = data.artists?.items || data.tracks?.items || data.playlists?.items || [];
@@ -1346,9 +1371,7 @@ async function spotifySearch(query, type = 'track') {
 
     if (type === 'artist') {
       // Get artist top tracks
-      const topRes = await fetch(`https://api.spotify.com/v1/artists/${first.id}/top-tracks?market=from_token`, {
-        headers: { 'Authorization': `Bearer ${spotifyToken}` }
-      });
+      const topRes = await spotifyFetch(`https://api.spotify.com/v1/artists/${first.id}/top-tracks?market=from_token`);
       const topData = await topRes.json();
       const topTracks = topData.tracks || [];
 
@@ -1371,9 +1394,8 @@ async function spotifySearch(query, type = 'track') {
 
     // Play on device
     if (deviceId) {
-      const playRes = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+      const playRes = await spotifyFetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
         method: 'PUT',
-        headers: { 'Authorization': `Bearer ${spotifyToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(playBody)
       });
       if (!playRes.ok && playRes.status !== 204) {
@@ -1591,8 +1613,8 @@ function startListening(mode) {
   };
 
   rec.onerror = (e) => {
+    if (e.error === 'aborted' || e.error === 'interrupted') return;
     console.log('Voice error:', e.error, 'mode:', currentMode);
-    if (e.error === 'aborted') return; // намеренная остановка
 
     recognition = null;
     currentMode = 'idle';
