@@ -65,7 +65,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:16p
 .ctrl-btn{background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;padding:4px;transition:transform .15s;border-radius:6px;}
 .ctrl-btn:hover{transform:scale(1.15);color:var(--accent);}
 .ctrl-btn.main{font-size:28px;color:var(--accent);}
-#ytPlayer{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}
+
 .volume-row{display:flex;align-items:center;gap:8px;flex:1;}
 .vol-icon{font-size:16px;color:var(--muted);}
 input[type=range]{flex:1;accent-color:var(--accent);height:3px;}
@@ -137,7 +137,16 @@ input[type=range]{flex:1;accent-color:var(--accent);height:3px;}
   </div>
 
   <div class="player-card" id="playerCard">
-    <div id="ytPlayer"></div>
+    <!-- Visible iframe - Safari requires visible player with user interaction -->
+    <div class="yt-frame-wrap" id="ytFrameWrap">
+      <iframe id="ytIframe"
+        width="100%" height="200"
+        frameborder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowfullscreen
+        style="border-radius:12px 12px 0 0;display:block;">
+      </iframe>
+    </div>
     <div class="player-info">
       <img class="player-thumb" id="playerThumb" src="" alt="">
       <div class="player-meta">
@@ -272,7 +281,7 @@ const i18n={
 
 let lang='uk', t=i18n.uk;
 let isListening=false,voiceEnabled=true,speechRate=1.0;
-let recognition=null,ytPlayer=null,ytReady=false;
+let recognition=null,ytPlayer=null,ytReady=true;
 let currentQueue=[],currentIdx=0,isPlaying=false;
 let accessToken=null,userInfo=null,playlists=[];
 
@@ -302,23 +311,9 @@ function renderCmds(){
 }
 
 // YOUTUBE
-const ytTag=document.createElement('script');
-ytTag.src='https://www.youtube.com/iframe_api';
-document.head.appendChild(ytTag);
-
-window.onYouTubeIframeAPIReady=function(){
-  ytPlayer=new YT.Player('ytPlayer',{
-    height:'1',width:'1',playerVars:{autoplay:1,playsinline:1,controls:0},
-    events:{
-      onReady:()=>{ytReady=true;},
-      onStateChange:e=>{
-        if(e.data===YT.PlayerState.ENDED)nextTrack();
-        if(e.data===YT.PlayerState.PLAYING){isPlaying=true;document.getElementById('playPauseBtn').textContent='⏸️';}
-        if(e.data===YT.PlayerState.PAUSED){isPlaying=false;document.getElementById('playPauseBtn').textContent='▶️';}
-      }
-    }
-  });
-};
+// Use visible iframe for Safari iOS compatibility
+function initPlayer(){ ytReady=true; }
+initPlayer();
 
 function ytJsonp(url){
   return new Promise((resolve,reject)=>{
@@ -375,40 +370,44 @@ function playVideo(item){
   playVideoById(id,sn.title||'',sn.channelTitle||'',sn.thumbnails?.medium?.url||sn.thumbnails?.default?.url||'',currentIdx);
 }
 
+let currentVideoId = null;
+
 function playVideoById(id,title,ch,thumb,idx){
-  if(!ytReady||!ytPlayer){setTimeout(()=>playVideoById(id,title,ch,thumb,idx),500);return;}
   currentIdx=idx;
-  ytPlayer.loadVideoById({videoId:id,suggestedQuality:'small'});
-  ytPlayer.setVolume(parseInt(document.getElementById('volRange').value));
+  currentVideoId=id;
+  const iframe=document.getElementById('ytIframe');
+  // enablejsapi=1 allows postMessage control; autoplay=1 + playsinline=1 critical for iOS
+  iframe.src=`https://www.youtube.com/embed/${id}?autoplay=1&playsinline=1&rel=0&enablejsapi=1&modestbranding=1&origin=${encodeURIComponent(location.origin)}`;
   document.getElementById('playerCard').classList.add('show');
   document.getElementById('playerTitle').textContent=decodeHtml(title);
   document.getElementById('playerChannel').textContent=decodeHtml(ch);
   document.getElementById('playerThumb').src=thumb;
   document.getElementById('resultsList').classList.remove('show');
   isPlaying=true;
-  // Safari iOS requires user gesture - show tap overlay if needed
-  showTapOverlay();
+  document.getElementById('playPauseBtn').textContent='⏸️';
+  // Listen for video end via postMessage
+  window.onmessage=function(e){
+    try{
+      const d=JSON.parse(e.data);
+      if(d.event==='onStateChange' && d.info===0) nextTrack(); // 0 = ended
+    }catch(ex){}
+  };
 }
 
-function showTapOverlay(){
-  let overlay=document.getElementById('tapOverlay');
-  if(!overlay){
-    overlay=document.createElement('div');
-    overlay.id='tapOverlay';
-    overlay.style.cssText='position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);';
-    overlay.innerHTML=`<div style="background:linear-gradient(135deg,#4f8ef7,#7c3aed);border-radius:50%;width:100px;height:100px;display:flex;align-items:center;justify-content:center;font-size:48px;cursor:pointer;box-shadow:0 0 40px rgba(79,142,247,0.5)">▶️</div>`;
-    overlay.onclick=()=>{
-      ytPlayer.playVideo();
-      overlay.remove();
-    };
-    document.body.appendChild(overlay);
+function togglePlayPause(){
+  const iframe=document.getElementById('ytIframe');
+  if(isPlaying){
+    // Pause: reload without autoplay
+    iframe.src=`https://www.youtube.com/embed/${currentVideoId}?autoplay=0&playsinline=1&rel=0&origin=${encodeURIComponent(location.origin)}`;
+    isPlaying=false; document.getElementById('playPauseBtn').textContent='▶️';
+  } else {
+    iframe.src=`https://www.youtube.com/embed/${currentVideoId}?autoplay=1&playsinline=1&rel=0&origin=${encodeURIComponent(location.origin)}`;
+    isPlaying=true; document.getElementById('playPauseBtn').textContent='⏸️';
   }
 }
-
-function togglePlayPause(){if(!ytPlayer)return;isPlaying?ytPlayer.pauseVideo():ytPlayer.playVideo();}
 function nextTrack(){if(currentQueue.length){currentIdx=(currentIdx+1)%currentQueue.length;playVideo(currentQueue[currentIdx]);}}
 function prevTrack(){if(currentQueue.length){currentIdx=(currentIdx-1+currentQueue.length)%currentQueue.length;playVideo(currentQueue[currentIdx]);}}
-function setVolume(v){if(ytPlayer)ytPlayer.setVolume(parseInt(v));}
+function setVolume(v){ /* Volume controlled via YouTube player controls */ }
 
 // GOOGLE AUTH
 function handleGoogleAuth(){
