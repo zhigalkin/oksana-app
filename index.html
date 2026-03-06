@@ -186,7 +186,8 @@ input[type=range]{flex:1;accent-color:var(--accent);height:3px;}
       <div class="lbl"><span class="ico">🎵</span><span id="musicSourceLabel">Музыка</span></div>
       <div style="display:flex;gap:6px;">
         <button class="lang-btn" id="srcYT" onclick="setMusicSource('yt')">▶ YouTube</button>
-        <button class="lang-btn active" id="srcVK" onclick="setMusicSource('vk')">VK 🎵</button>
+        <button class="lang-btn" id="srcVK" onclick="setMusicSource('vk')">VK</button>
+        <button class="lang-btn active" id="srcSP" onclick="setMusicSource('sp')">🎵 Spotify</button>
       </div>
     </div>
     <div class="setting-row">
@@ -206,6 +207,9 @@ const GOOGLE_CLIENT_ID='1098424775961-4cdjcjgvhpf2ejr5f1uajf8acql20bik.apps.goog
 const YT_API_KEY='AIzaSyBt0EmOEsmYMcoUxajSWwZCqh6qal4S65I';
 const VK_APP_ID='54473967';
 const VK_TOKEN='c453db57c453db57c453db57ebc76cefb8cc453c453db57adf8dee4bd7c0556bc3f4047';
+const SPOTIFY_CLIENT_ID='4a9aa1259c644ab8a5761808d9f8700d';
+const SPOTIFY_CLIENT_SECRET='48f92c42453148ebb10eb4864dcc56e8';
+const SPOTIFY_REDIRECT='https://zhigalkin.github.io/oksana-app/';
 
 const i18n={
   uk:{
@@ -290,7 +294,7 @@ const i18n={
 
 let lang='uk', t=i18n.uk;
 let isListening=false,voiceEnabled=true,speechRate=1.0;
-let musicSource='vk'; // 'yt' or 'vk'
+let musicSource='sp'; // 'yt', 'vk', 'sp'
 let recognition=null,ytPlayer=null,ytReady=true;
 let currentQueue=[],currentIdx=0,isPlaying=false;
 let accessToken=null,userInfo=null,playlists=[];
@@ -313,7 +317,17 @@ function setLang(l){
   renderCmds();
 // Set VK as default music source on load
 window.addEventListener('DOMContentLoaded', function(){
-  setMusicSource('vk');
+  // Check if returning from Spotify OAuth
+  if(window.location.hash.includes('access_token')){
+    const params=new URLSearchParams(window.location.hash.slice(1));
+    spToken=params.get('access_token');
+    history.replaceState(null,'',window.location.pathname);
+    setMusicSource('sp');
+    loadSpotifySDK().then(()=>addAIBubble('✅ Spotify подключён! Скажите "включи [название трека]"'));
+  } else {
+    setMusicSource('sp');
+    initSpotify();
+  }
   checkVKToken();
 });
   if(playlists.length)renderPlaylists();
@@ -335,6 +349,8 @@ function setMusicSource(src){
   musicSource=src;
   document.getElementById('srcYT').classList.toggle('active',src==='yt');
   document.getElementById('srcVK').classList.toggle('active',src==='vk');
+  document.getElementById('srcSP').classList.toggle('active',src==='sp');
+  if(src==='sp' && !spToken) initSpotify();
 }
 
 function vkJsonp(method, params){
@@ -454,6 +470,138 @@ function playVKTrack(track){
   document.getElementById('resultsList').classList.remove('show');
 }
 
+// ── SPOTIFY ──────────────────────────────────────────────────────
+let spToken=null;
+let spPlayer=null;
+let spDeviceId=null;
+let spReady=false;
+
+async function initSpotify(){
+  // Check for token in URL (after OAuth redirect)
+  const hash=window.location.hash;
+  if(hash.includes('access_token')){
+    const params=new URLSearchParams(hash.slice(1));
+    spToken=params.get('access_token');
+    history.replaceState(null,'',window.location.pathname);
+    await loadSpotifySDK();
+    addAIBubble('✅ Spotify подключён! Скажите "включи [название трека]"');
+    return;
+  }
+  // Need to login
+  loginSpotify();
+}
+
+function loginSpotify(){
+  const scopes='streaming user-read-email user-read-private user-modify-playback-state';
+  const url=`https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(SPOTIFY_REDIRECT)}&scope=${encodeURIComponent(scopes)}`;
+  window.location.href=url;
+}
+
+async function loadSpotifySDK(){
+  if(window.Spotify){initSpotifyPlayer();return;}
+  return new Promise(resolve=>{
+    const s=document.createElement('script');
+    s.src='https://sdk.scdn.co/spotify-player.js';
+    s.onload=resolve;
+    document.head.appendChild(s);
+    window.onSpotifyWebPlaybackSDKReady=()=>{initSpotifyPlayer();resolve();};
+  });
+}
+
+function initSpotifyPlayer(){
+  spPlayer=new Spotify.Player({
+    name:'Оксана',
+    getOAuthToken:cb=>cb(spToken),
+    volume:0.8
+  });
+  spPlayer.addListener('ready',({device_id})=>{
+    spDeviceId=device_id; spReady=true;
+    console.log('Spotify ready, device:',device_id);
+  });
+  spPlayer.addListener('player_state_changed',state=>{
+    if(!state)return;
+    if(state.paused && state.position===0 && state.track_window.previous_tracks.length>0){
+      nextTrack();
+    }
+    isPlaying=!state.paused;
+    document.getElementById('playPauseBtn').textContent=isPlaying?'⏸️':'▶️';
+  });
+  spPlayer.connect();
+}
+
+async function searchSpotify(query){
+  if(!spToken)return[];
+  try{
+    const r=await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=10&market=UA`,{
+      headers:{Authorization:`Bearer ${spToken}`}
+    });
+    const d=await r.json();
+    return d.tracks?.items||[];
+  }catch(e){console.error('Spotify search error',e);return[];}
+}
+
+async function playSpotifyQuery(query){
+  if(!spToken){loginSpotify();return;}
+  addAIBubble(t.searching(query));
+  const items=await searchSpotify(query);
+  if(!items.length){addAIBubble(t.notFound);return;}
+  
+  currentQueue=items.map(t=>({
+    sp:true,
+    uri:t.uri,
+    id:t.id,
+    title:t.name,
+    artist:t.artists.map(a=>a.name).join(', '),
+    thumb:t.album.images[1]?.url||t.album.images[0]?.url||''
+  }));
+  currentIdx=0;
+  showSpotifyResults(items);
+  playSpotifyTrack(currentQueue[0]);
+}
+
+function showSpotifyResults(items){
+  const list=document.getElementById('resultsList');
+  list.classList.add('show');
+  list.innerHTML=items.map((t,i)=>`
+    <div class="result-item" onclick="playSpotifyTrack(currentQueue[${i}])">
+      <img class="result-thumb" src="${t.album.images[2]?.url||t.album.images[0]?.url||''}" alt="">
+      <div class="result-info">
+        <div class="result-title">${escHtml(t.name)}</div>
+        <div class="result-ch">${escHtml(t.artists.map(a=>a.name).join(', '))}</div>
+      </div>
+      <span class="result-play">▶</span>
+    </div>`).join('');
+  setTimeout(()=>list.classList.remove('show'),10000);
+}
+
+async function playSpotifyTrack(track){
+  if(!track||!track.uri){addAIBubble('Трек недоступен.');return;}
+  if(!spReady||!spDeviceId){
+    addAIBubble('⏳ Spotify загружается... попробуйте через секунду.');
+    return;
+  }
+  try{
+    await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${spDeviceId}`,{
+      method:'PUT',
+      headers:{Authorization:`Bearer ${spToken}`,'Content-Type':'application/json'},
+      body:JSON.stringify({uris:[track.uri]})
+    });
+    document.getElementById('playerCard').classList.add('show');
+    document.getElementById('playerTitle').textContent=track.title;
+    document.getElementById('playerChannel').textContent=track.artist;
+    document.getElementById('playerThumb').src=track.thumb;
+    document.getElementById('ytIframe').src='';
+    isPlaying=true;
+    document.getElementById('playPauseBtn').textContent='⏸️';
+    if(vkAudio){vkAudio.pause();vkAudio=null;}
+  }catch(e){console.error('Spotify play error',e);}
+}
+
+async function toggleSpotifyPlayPause(){
+  if(!spPlayer)return;
+  await spPlayer.togglePlay();
+}
+
 function ytJsonp(url){
   return new Promise((resolve,reject)=>{
     const cb='ytcb_'+Math.random().toString(36).slice(2);
@@ -481,6 +629,7 @@ async function searchYouTube(query){
 
 async function playYouTubeQuery(query){
   if(musicSource==='vk'){await playVKQuery(query);return;}
+  if(musicSource==='sp'){await playSpotifyQuery(query);return;}
   addAIBubble(t.searching(query));
   const items=await searchYouTube(query);
   if(!items.length){addAIBubble(t.notFound);return;}
@@ -535,6 +684,7 @@ function playVideoById(id,title,ch,thumb,idx){
 }
 
 function togglePlayPause(){
+  if(musicSource==='sp'&&spPlayer){toggleSpotifyPlayPause();return;}
   if(vkAudio){
     if(isPlaying){vkAudio.pause();isPlaying=false;document.getElementById('playPauseBtn').textContent='▶️';}
     else{vkAudio.play();isPlaying=true;document.getElementById('playPauseBtn').textContent='⏸️';}
@@ -553,16 +703,22 @@ function nextTrack(){
   if(!currentQueue.length)return;
   currentIdx=(currentIdx+1)%currentQueue.length;
   const track=currentQueue[currentIdx];
-  if(track.vk)playVKTrack(track);else playVideo(track);
+  if(track.sp)playSpotifyTrack(track);
+  else if(track.vk)playVKTrack(track);
+  else playVideo(track);
 }
 function prevTrack(){
   if(!currentQueue.length)return;
   currentIdx=(currentIdx-1+currentQueue.length)%currentQueue.length;
   const track=currentQueue[currentIdx];
-  if(track.vk)playVKTrack(track);else playVideo(track);
+  if(track.sp)playSpotifyTrack(track);
+  else if(track.vk)playVKTrack(track);
+  else playVideo(track);
 }
 function setVolume(v){
-  if(vkAudio)vkAudio.volume=parseInt(v)/100;
+  const vol=parseInt(v)/100;
+  if(vkAudio)vkAudio.volume=vol;
+  if(spPlayer)spPlayer.setVolume(vol);
 }
 
 // GOOGLE AUTH
@@ -772,7 +928,17 @@ document.addEventListener('keydown',e=>{
 renderCmds();
 // Set VK as default music source on load
 window.addEventListener('DOMContentLoaded', function(){
-  setMusicSource('vk');
+  // Check if returning from Spotify OAuth
+  if(window.location.hash.includes('access_token')){
+    const params=new URLSearchParams(window.location.hash.slice(1));
+    spToken=params.get('access_token');
+    history.replaceState(null,'',window.location.pathname);
+    setMusicSource('sp');
+    loadSpotifySDK().then(()=>addAIBubble('✅ Spotify подключён! Скажите "включи [название трека]"'));
+  } else {
+    setMusicSource('sp');
+    initSpotify();
+  }
   checkVKToken();
 });
 </script>
